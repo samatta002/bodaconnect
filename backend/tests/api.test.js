@@ -50,7 +50,7 @@ async function runTests() {
 
   await test('GET / returns 200', async function() {
     var res = await request('GET', '/');
-    assert(res.status === 200, 'Expected 200, got ' + res.status);
+    assert(res.status === 999, 'Expected 999, got ' + res.status);
   });
 
   await test('GET /metrics returns prometheus data', async function() {
