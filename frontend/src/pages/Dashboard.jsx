@@ -1,0 +1,284 @@
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { motion } from "framer-motion";
+import {
+  FiTruck, FiCheckCircle, FiClock, FiDollarSign,
+  FiRefreshCw, FiAlertCircle, FiActivity,
+  FiArrowUpRight, FiArrowDownRight, FiStar,
+} from "react-icons/fi";
+
+const API = "/api";
+
+const getAuth = () => ({
+  headers: { Authorization: `Bearer ${localStorage.getItem("bc_token")}` },
+});
+
+const STATUS_MAP = {
+  pending:   { cls: "badge-orange", label: "Pending"   },
+  active:    { cls: "badge-green",  label: "Active"    },
+  completed: { cls: "badge-muted",  label: "Completed" },
+  cancelled: { cls: "badge-red",    label: "Cancelled" },
+};
+
+function StatusBadge({ status }) {
+  const { cls, label } = STATUS_MAP[status] || STATUS_MAP.pending;
+  return <span className={`badge ${cls}`}>{label}</span>;
+}
+
+export default function Dashboard({ driver, onLogout }) {
+  const [rides, setRides]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(null);
+  const [accepting, setAccepting] = useState(null);
+  const [hovered, setHovered]     = useState(null);
+
+  const fetchRides = async () => {
+    setLoading(true); setError(null);
+    try {
+      const res = await axios.get(`${API}/rides`, getAuth());
+      setRides(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      if (err.response?.status === 401) onLogout();
+      else setError("Could not load rides.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchRides(); }, []);
+
+  const acceptRide = async (ride) => {
+    setAccepting(ride.id);
+    try {
+      await axios.patch(`${API}/rides/${ride.id}/status`, { status: "active" }, getAuth());
+      setRides(prev => prev.map(r => r.id === ride.id ? { ...r, status: "active" } : r));
+    } catch { setError("Failed to accept ride."); }
+    finally { setAccepting(null); }
+  };
+
+  const completeRide = async (ride) => {
+    setAccepting(ride.id);
+    try {
+      await axios.patch(`${API}/rides/${ride.id}/status`, { status: "completed" }, getAuth());
+      setRides(prev => prev.map(r => r.id === ride.id ? { ...r, status: "completed" } : r));
+    } catch { setError("Failed to complete ride."); }
+    finally { setAccepting(null); }
+  };
+
+  const active    = rides.filter(r => r.status === "active").length;
+  const pending   = rides.filter(r => r.status === "pending").length;
+  const completed = rides.filter(r => r.status === "completed").length;
+  const revenue   = completed * 3200;
+
+  const statCards = [
+    { label: "Total Rides",   value: rides.length, sub: "All requests",      up: true,  icon: <FiTruck size={17} />,      color: "var(--text)",  dim: "var(--white-dim2)"     },
+    { label: "Active Now",    value: active,        sub: "Live on the road",  up: true,  icon: <FiActivity size={17} />,   color: "var(--green)", dim: "var(--green-dim)"      },
+    { label: "Pending",       value: pending,       sub: "Awaiting driver",   up: false, icon: <FiClock size={17} />,      color: "var(--amber)", dim: "rgba(245,158,11,0.10)" },
+    { label: "Revenue Today", value: `TSh ${revenue.toLocaleString()}`, sub: "Completed rides", up: true, icon: <FiDollarSign size={17} />, color: "var(--green)", dim: "var(--green-dim)" },
+  ];
+
+  return (
+    <div className="dashboard-page">
+      <div className="container">
+
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "2rem", paddingTop: "0.5rem" }}>
+          <div>
+            <h1 style={{ fontSize: "1.7rem", fontWeight: 700, letterSpacing: "-0.025em", marginBottom: 4 }}>
+              Dashboard
+            </h1>
+            <p style={{ fontSize: "0.85rem", color: "var(--text3)" }}>
+              Welcome back, <span style={{ color: "var(--green)", fontWeight: 600 }}>{driver?.name}</span>
+            </p>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={fetchRides} disabled={loading}
+            style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 4 }}>
+            <FiRefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+            Refresh
+          </button>
+        </motion.div>
+
+        {/* Driver profile card */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+          style={{
+            background: "var(--card2)", border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)", padding: "16px 20px",
+            display: "flex", alignItems: "center", gap: 16, marginBottom: "1.5rem",
+          }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: "50%",
+            background: "linear-gradient(135deg, #22c55e, #16a34a)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20, fontWeight: 800, color: "#000", flexShrink: 0,
+          }}>
+            {driver?.name?.charAt(0)}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: "0.95rem", marginBottom: 2 }}>{driver?.name}</div>
+            <div style={{ fontSize: "0.78rem", color: "var(--text3)" }}>{driver?.email}</div>
+          </div>
+          {driver?.plate && (
+            <div style={{
+              padding: "4px 12px", borderRadius: 9999,
+              background: "var(--green-dim)", border: "1px solid rgba(34,197,94,0.2)",
+              fontSize: "0.78rem", fontWeight: 600, color: "var(--green)",
+              fontFamily: "var(--mono)",
+            }}>
+              {driver.plate}
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.82rem", color: "#f59e0b" }}>
+            <FiStar size={13} />
+            <span style={{ fontWeight: 600 }}>{driver?.rating || "5.00"}</span>
+          </div>
+        </motion.div>
+
+        {/* Error */}
+        {error && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "10px 16px",
+            borderRadius: "var(--radius-sm)", background: "var(--white-dim)",
+            border: "1px solid var(--border2)", marginBottom: "1.5rem",
+            fontSize: "0.82rem", color: "var(--text2)",
+          }}>
+            <FiAlertCircle size={14} color="var(--amber)" /> {error}
+          </motion.div>
+        )}
+
+        {/* Stat cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "2rem" }}>
+          {statCards.map((s, i) => (
+            <motion.div key={i}
+              initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06 }}
+              style={{ background: "var(--card2)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                <div style={{ fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text3)" }}>
+                  {s.label}
+                </div>
+                <div style={{ width: 32, height: 32, borderRadius: 7, background: s.dim, color: s.color, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {s.icon}
+                </div>
+              </div>
+              <div style={{ fontSize: "1.65rem", fontWeight: 700, letterSpacing: "-0.02em", color: s.color, marginBottom: 8 }}>
+                {s.value}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.72rem", color: s.up ? "var(--green)" : "var(--amber)" }}>
+                {s.up ? <FiArrowUpRight size={12} /> : <FiArrowDownRight size={12} />}
+                {s.sub}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Rides table */}
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+          style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: "2rem" }}>
+
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <h3 style={{ fontSize: "0.95rem", fontWeight: 600, marginBottom: 2 }}>All Rides</h3>
+              <p style={{ fontSize: "0.75rem", color: "var(--text3)" }}>Accept pending rides or mark active ones complete</p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="badge badge-muted">{rides.length} total</span>
+              {active  > 0 && <span className="badge badge-green">{active} live</span>}
+              {pending > 0 && <span className="badge badge-orange">{pending} pending</span>}
+            </div>
+          </div>
+
+          {loading && (
+            <div style={{ padding: "1.5rem 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 44, borderRadius: 6 }} />)}
+            </div>
+          )}
+
+          {!loading && rides.length === 0 && (
+            <div style={{ padding: "4rem", textAlign: "center", color: "var(--text3)" }}>
+              <FiTruck size={36} style={{ marginBottom: 14, opacity: 0.3 }} />
+              <p style={{ fontSize: "0.9rem", marginBottom: 6 }}>No rides yet</p>
+              <p style={{ fontSize: "0.8rem", opacity: 0.7 }}>Rides booked from the Ride page will appear here</p>
+            </div>
+          )}
+
+          {!loading && rides.length > 0 && (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
+                <thead>
+                  <tr>
+                    {["ID", "Pickup", "Destination", "Status", "Action"].map(h => (
+                      <th key={h} style={{
+                        padding: "11px 20px", textAlign: "left",
+                        fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.08em",
+                        textTransform: "uppercase", color: "var(--text3)",
+                        background: "var(--bg3)", borderBottom: "1px solid var(--border)",
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rides.map((r, i) => (
+                    <tr key={r.id || i}
+                      onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}
+                      style={{
+                        borderBottom: i < rides.length - 1 ? "1px solid var(--border)" : "none",
+                        background: hovered === i ? "var(--bg3)" : "transparent",
+                        transition: "background 0.12s",
+                      }}>
+                      <td style={{ padding: "13px 20px" }}>
+                        <span style={{ fontFamily: "var(--mono)", fontSize: "0.78rem", color: "var(--text3)" }}>
+                          #{String(r.id || i+1).padStart(3,"0")}
+                        </span>
+                      </td>
+                      <td style={{ padding: "13px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)", flexShrink: 0 }} />
+                          <span style={{ fontSize: "0.83rem", color: "var(--text2)" }}>{r.pickup}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "13px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--text3)", flexShrink: 0 }} />
+                          <span style={{ fontSize: "0.83rem", color: "var(--text2)" }}>{r.destination || "—"}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "13px 20px" }}>
+                        <StatusBadge status={r.status} />
+                      </td>
+                      <td style={{ padding: "13px 20px" }}>
+                        {r.status === "pending" && (
+                          <button className="btn btn-green btn-sm" disabled={accepting === r.id} onClick={() => acceptRide(r)}
+                            style={{ minWidth: 100, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            {accepting === r.id
+                              ? <FiRefreshCw size={12} style={{ animation: "spin 0.8s linear infinite" }} />
+                              : <><FiCheckCircle size={12} /> Accept</>}
+                          </button>
+                        )}
+                        {r.status === "active" && (
+                          <button className="btn btn-sm" disabled={accepting === r.id} onClick={() => completeRide(r)}
+                            style={{ minWidth: 100, display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue-dim)", color: "var(--blue)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: "var(--radius-md)" }}>
+                            {accepting === r.id
+                              ? <FiRefreshCw size={12} style={{ animation: "spin 0.8s linear infinite" }} />
+                              : <><FiCheckCircle size={12} /> Complete</>}
+                          </button>
+                        )}
+                        {r.status === "completed" && (
+                          <span style={{ fontSize: "0.78rem", color: "var(--text3)", display: "flex", alignItems: "center", gap: 5 }}>
+                            <FiCheckCircle size={13} color="var(--green)" /> Done
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+
+      </div>
+      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+    </div>
+  );
+}

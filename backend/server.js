@@ -1,0 +1,406 @@
+const express    = require("express");
+const cors       = require("cors");
+const mysql      = require("mysql2/promise");
+const bcrypt     = require("bcryptjs");
+const jwt        = require("jsonwebtoken");
+const promClient = require("prom-client");
+const mqtt       = require("mqtt");
+
+const app = express();
+const JWT_SECRET = process.env.JWT_SECRET || "bodaconnect_secret_2025";
+
+app.use(cors({ origin: "*", methods: ["GET","POST","PATCH","DELETE","OPTIONS"] }));
+app.use(express.json());
+
+// ── Prometheus ────────────────────────────────────────
+const register = new promClient.Registry();
+promClient.collectDefaultMetrics({ register });
+const ridesTotal     = new promClient.Counter({ name: "rides_created_total",   help: "Total rides created",   registers: [register] });
+const ridesAccepted  = new promClient.Counter({ name: "rides_accepted_total",  help: "Total rides accepted",  registers: [register] });
+const ridesCompleted = new promClient.Counter({ name: "rides_completed_total", help: "Total rides completed", registers: [register] });
+const activeRidesGauge = new promClient.Gauge({ name: "rides_active_current",  help: "Current active rides",  registers: [register] });
+const revenueGauge   = new promClient.Gauge({ name: "rides_revenue_total",     help: "Total revenue in TSh",  registers: [register] });
+const httpRequestsTotal = new promClient.Counter({
+  name: "http_requests_total", help: "Total HTTP requests",
+  labelNames: ["method", "route", "status"], registers: [register],
+});
+const mqttMessagesTotal = new promClient.Counter({
+  name: "mqtt_messages_published_total", help: "Total MQTT messages published",
+  labelNames: ["topic"], registers: [register],
+});
+
+app.use((req, res, next) => {
+  res.on("finish", () => {
+    httpRequestsTotal.inc({ method: req.method, route: req.path, status: res.statusCode });
+  });
+  next();
+});
+
+// ── Auth middleware ───────────────────────────────────
+function authMiddleware(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header) return res.status(401).json({ error: "No token provided" });
+  const token = header.replace("Bearer ", "");
+  try {
+    req.driver = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
+// ── MQTT Client ───────────────────────────────────────
+const MQTT_HOST = process.env.MQTT_HOST || "localhost";
+const MQTT_PORT = process.env.MQTT_PORT || 1883;
+let mqttClient = null;
+
+function connectMQTT() {
+  const url = `mqtt://${MQTT_HOST}:${MQTT_PORT}`;
+  console.log(`Connecting to MQTT broker at ${url}...`);
+
+  mqttClient = mqtt.connect(url, {
+    clientId: `bodaconnect-backend-${Date.now()}`,
+    clean: true,
+    reconnectPeriod: 3000,
+    connectTimeout: 10000,
+  });
+
+  mqttClient.on("connect", () => {
+    console.log("✅ MQTT broker connected");
+
+    // Subscribe to driver location updates
+    mqttClient.subscribe("driver/location", (err) => {
+      if (!err) console.log("📍 Subscribed to driver/location");
+    });
+
+    // Subscribe to driver status updates
+    mqttClient.subscribe("ride/status", (err) => {
+      if (!err) console.log("🔄 Subscribed to ride/status");
+    });
+  });
+
+  mqttClient.on("message", (topic, message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      console.log(`📨 MQTT [${topic}]:`, data);
+    } catch {
+      console.log(`📨 MQTT [${topic}]: ${message.toString()}`);
+    }
+  });
+
+  mqttClient.on("error", (err) => {
+    console.log("⚠️  MQTT error:", err.message);
+  });
+
+  mqttClient.on("reconnect", () => {
+    console.log("🔄 MQTT reconnecting...");
+  });
+
+  mqttClient.on("disconnect", () => {
+    console.log("❌ MQTT disconnected");
+  });
+}
+
+// Helper to publish MQTT message
+function mqttPublish(topic, payload) {
+  if (!mqttClient || !mqttClient.connected) {
+    console.log(`⚠️  MQTT not connected, skipping publish to ${topic}`);
+    return;
+  }
+  const message = JSON.stringify({ ...payload, timestamp: new Date().toISOString() });
+  mqttClient.publish(topic, message, { qos: 1, retain: false }, (err) => {
+    if (err) {
+      console.log(`❌ MQTT publish error [${topic}]:`, err.message);
+    } else {
+      console.log(`📤 MQTT published [${topic}]:`, message);
+      mqttMessagesTotal.inc({ topic });
+    }
+  });
+}
+
+// ── Wait for MySQL ────────────────────────────────────
+async function waitForDB() {
+  const cfg = {
+    host:     process.env.DB_HOST     || "db",
+    user:     process.env.DB_USER     || "root",
+    password: process.env.DB_PASSWORD || "root",
+    database: process.env.DB_NAME     || "bodadb",
+  };
+  while (true) {
+    try {
+      const conn = await mysql.createConnection(cfg);
+      console.log("✅ MySQL connected");
+      return conn;
+    } catch (err) {
+      console.log("⏳ Waiting for MySQL...", err.message);
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+}
+
+async function start() {
+  // Connect to MQTT first (non-blocking)
+  connectMQTT();
+
+  // Connect to DB
+  const db = await waitForDB();
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS drivers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      phone VARCHAR(30),
+      password VARCHAR(255) NOT NULL,
+      plate VARCHAR(50),
+      status ENUM('available','on_trip','offline') DEFAULT 'available',
+      rating DECIMAL(3,2) DEFAULT 5.00,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS rides (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      pickup VARCHAR(255) NOT NULL,
+      destination VARCHAR(255),
+      status ENUM('pending','active','completed','cancelled') DEFAULT 'pending',
+      driver_id INT DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  console.log("✅ Tables ready");
+
+  const [activeRows] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status='active'");
+  activeRidesGauge.set(activeRows[0].count);
+  const [revRows] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status='completed'");
+  revenueGauge.set(revRows[0].count * 3200);
+
+  // ═══════════════════════════════════════
+  // PUBLIC ROUTES
+  // ═══════════════════════════════════════
+
+  app.get("/", (req, res) => {
+    res.json({
+      status: "BodaConnect running",
+      mqtt: mqttClient?.connected ? "connected" : "disconnected",
+      time: new Date()
+    });
+  });
+
+  app.get("/metrics", async (req, res) => {
+    res.set("Content-Type", register.contentType);
+    res.end(await register.metrics());
+  });
+
+  // REGISTER
+  app.post("/auth/register", async (req, res) => {
+    const { name, email, phone, password, plate } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "Name, email and password are required" });
+    }
+    try {
+      const [existing] = await db.execute("SELECT id FROM drivers WHERE email=?", [email]);
+      if (existing.length > 0) return res.status(409).json({ error: "Email already registered" });
+      const hashed = await bcrypt.hash(password, 10);
+      const [result] = await db.execute(
+        "INSERT INTO drivers (name, email, phone, password, plate) VALUES (?,?,?,?,?)",
+        [name, email, phone || "", hashed, plate || ""]
+      );
+      const token = jwt.sign({ id: result.insertId, name, email, plate: plate || "" }, JWT_SECRET, { expiresIn: "7d" });
+      res.status(201).json({ token, driver: { id: result.insertId, name, email, phone, plate } });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // LOGIN
+  app.post("/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
+    try {
+      const [rows] = await db.execute("SELECT * FROM drivers WHERE email=?", [email]);
+      if (rows.length === 0) return res.status(401).json({ error: "Invalid email or password" });
+      const driver = rows[0];
+      const valid = await bcrypt.compare(password, driver.password);
+      if (!valid) return res.status(401).json({ error: "Invalid email or password" });
+      const token = jwt.sign(
+        { id: driver.id, name: driver.name, email: driver.email, plate: driver.plate },
+        JWT_SECRET, { expiresIn: "7d" }
+      );
+      res.json({ token, driver: { id: driver.id, name: driver.name, email: driver.email, phone: driver.phone, plate: driver.plate, rating: driver.rating } });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/auth/me", authMiddleware, async (req, res) => {
+    try {
+      const [rows] = await db.execute(
+        "SELECT id, name, email, phone, plate, status, rating FROM drivers WHERE id=?",
+        [req.driver.id]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: "Driver not found" });
+      res.json(rows[0]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════
+  // RIDES (protected)
+  // ═══════════════════════════════════════
+
+  app.get("/rides", authMiddleware, async (req, res) => {
+    try {
+      const [rows] = await db.execute("SELECT * FROM rides ORDER BY id DESC");
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /rides — public, rider books a ride
+  app.post("/rides", async (req, res) => {
+    const { pickup, destination } = req.body;
+    if (!pickup) return res.status(400).json({ error: "pickup is required" });
+    try {
+      const [result] = await db.execute(
+        "INSERT INTO rides (pickup, destination, status) VALUES (?,?,'pending')",
+        [pickup, destination || ""]
+      );
+      ridesTotal.inc();
+
+      // ── OPTION A: Publish ride request to MQTT ────────
+      mqttPublish("ride/request", {
+        ride_id: result.insertId,
+        pickup,
+        destination: destination || "Not specified",
+        status: "pending",
+        message: "New ride request — drivers please respond",
+      });
+
+      res.status(201).json({ id: result.insertId, pickup, destination, status: "pending" });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PATCH /rides/:id/status — driver accepts or completes
+  app.patch("/rides/:id/status", authMiddleware, async (req, res) => {
+    const { status } = req.body;
+    try {
+      await db.execute(
+        "UPDATE rides SET status=?, driver_id=? WHERE id=?",
+        [status, req.driver.id, req.params.id]
+      );
+
+      if (status === "active") {
+        ridesAccepted.inc();
+        activeRidesGauge.inc();
+      }
+      if (status === "completed") {
+        ridesCompleted.inc();
+        activeRidesGauge.dec();
+        const [rev] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status='completed'");
+        revenueGauge.set(rev[0].count * 3200);
+      }
+
+      // ── OPTION C: Publish ride status update to MQTT ──
+      const statusMessages = {
+        active:    "Driver accepted — on the way",
+        completed: "Ride completed successfully",
+        cancelled: "Ride was cancelled",
+      };
+
+      mqttPublish("ride/status", {
+        ride_id: parseInt(req.params.id),
+        driver_id: req.driver.id,
+        driver_name: req.driver.name,
+        plate: req.driver.plate,
+        status,
+        message: statusMessages[status] || `Ride status updated to ${status}`,
+      });
+
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/rides/:id", authMiddleware, async (req, res) => {
+    try {
+      await db.execute("DELETE FROM rides WHERE id=?", [req.params.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── OPTION B: Driver publishes location ──────────────
+  app.post("/driver/location", authMiddleware, async (req, res) => {
+    const { latitude, longitude, location_name } = req.body;
+    if (!latitude || !longitude) {
+      return res.status(400).json({ error: "latitude and longitude are required" });
+    }
+    mqttPublish("driver/location", {
+      driver_id: req.driver.id,
+      driver_name: req.driver.name,
+      plate: req.driver.plate,
+      latitude,
+      longitude,
+      location_name: location_name || "Unknown",
+    });
+    res.json({ success: true, message: "Location published to MQTT" });
+  });
+
+  // ── MQTT status endpoint ──────────────────────────────
+  app.get("/mqtt/status", (req, res) => {
+    res.json({
+      connected: mqttClient?.connected || false,
+      broker: `mqtt://${MQTT_HOST}:${MQTT_PORT}`,
+      topics: ["ride/request", "driver/location", "ride/status"],
+    });
+  });
+
+  // ── Database viewer routes ────────────────────────────
+  app.get("/db/rides", authMiddleware, async (req, res) => {
+    try {
+      const [rows] = await db.execute("SELECT * FROM rides ORDER BY id DESC");
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.get("/db/drivers", authMiddleware, async (req, res) => {
+    try {
+      const [rows] = await db.execute(
+        "SELECT id, name, email, phone, plate, status, rating, created_at FROM drivers ORDER BY id DESC"
+      );
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.get("/db/stats", authMiddleware, async (req, res) => {
+    try {
+      const [[rideStats]] = await db.execute(`
+        SELECT COUNT(*) as total,
+          SUM(status='pending') as pending,
+          SUM(status='active') as active,
+          SUM(status='completed') as completed,
+          SUM(status='cancelled') as cancelled
+        FROM rides
+      `);
+      const [[driverStats]] = await db.execute("SELECT COUNT(*) as total FROM drivers");
+      res.json({ rides: rideStats, drivers: driverStats });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.listen(5000, "0.0.0.0", () => {
+    console.log("🚀 Server on port 5000");
+    console.log("📊 Metrics at http://localhost:5000/metrics");
+    console.log("📡 MQTT status at http://localhost:5000/mqtt/status");
+  });
+}
+
+start();

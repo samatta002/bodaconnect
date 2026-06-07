@@ -1,0 +1,102 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    pull_policy: never
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+    pull_policy: never
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    environment:
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: bodadb
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+
+  db:
+    image: mysql:8
+    pull_policy: never
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: bodadb
+    ports:
+      - "3308:3306"
+    volumes:
+      - ./db-init:/docker-entrypoint-initdb.d
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  mqtt:
+    image: eclipse-mosquitto
+    pull_policy: never
+    ports:
+      - "1883:1883"   # MQTT protocol port
+      - "9001:9001"   # WebSocket port (for browser clients)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: always
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    pull_policy: never
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: root
+    depends_on:
+      - db
+
+  prometheus:
+    image: prom/prometheus
+    pull_policy: never
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana
+    pull_policy: never
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+volumes:
+  db_data:
+  grafana_data:
+  prometheus_data:
