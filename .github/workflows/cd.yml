@@ -226,3 +226,25 @@ jobs:
         with:
           name: production-report
           path: reports/production.txt
+
+deploy-aws:
+    name: Deploy to AWS EC2
+    runs-on: ubuntu-latest
+    needs: deploy-production
+
+    steps:
+      - name: Deploy to AWS EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            cd ~/bodaconnect
+            git pull origin main
+            docker compose -f docker-compose.prod.yml up --build -d
+            echo "================================================"
+            echo "  AWS EC2 DEPLOYMENT COMPLETE"
+            echo "  Frontend : http://${{ secrets.EC2_HOST }}:5173"
+            echo "  Backend  : http://${{ secrets.EC2_HOST }}:5000"
+            echo "================================================"
