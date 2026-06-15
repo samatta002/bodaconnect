@@ -227,7 +227,7 @@ jobs:
           name: production-report
           path: reports/production.txt
 
-deploy-aws:
+  deploy-aws:
     name: Deploy to AWS EC2
     runs-on: ubuntu-latest
     needs: deploy-production
