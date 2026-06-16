@@ -517,6 +517,30 @@ table thead th {
   border: 1px solid var(--border);
 }
 
+.ride-driver-identity {
+  position: relative;
+}
+
+.ride-driver-photo {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(34,197,94,0.25);
+}
+
+.ride-driver-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .ride-tracker-grid svg,
 .ride-tracker-location svg {
   color: var(--green);
@@ -1701,6 +1725,14 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   font-size: 1.45rem;
   font-weight: 900;
   margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.profile-avatar img,
+.profile-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .profile-summary h1 {
@@ -1781,6 +1813,59 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.profile-photo-upload {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.2rem;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.035);
+}
+
+.profile-photo-preview {
+  width: 92px;
+  height: 92px;
+  border-radius: 24px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(34,197,94,0.22);
+}
+
+.profile-photo-upload strong,
+.profile-photo-upload span {
+  display: block;
+}
+
+.profile-photo-upload strong {
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+
+.profile-photo-upload span {
+  color: var(--text3);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin-bottom: 0.8rem;
+}
+
+.profile-photo-upload label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+
+.profile-photo-upload input {
+  display: none;
 }
 
 .profile-field > span {

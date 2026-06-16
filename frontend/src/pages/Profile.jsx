@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import {
   FiAward,
   FiCreditCard,
+  FiImage,
   FiLock,
   FiMail,
   FiPhone,
@@ -25,6 +26,7 @@ const emptyProfile = {
   phone: "",
   plate: "",
   nida: "",
+  photo_url: "",
   password: "",
 };
 
@@ -48,6 +50,25 @@ export default function Profile({ driver, onLogout, onDriverUpdate, onNotify }) 
 
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const notify = (toast) => onNotify?.(toast);
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      notify({ type: "error", text: "Please choose an image file." });
+      return;
+    }
+    if (file.size > 1_500_000) {
+      notify({ type: "error", text: "Driver photo must be under 1.5 MB." });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => set("photo_url", reader.result);
+    reader.onerror = () => notify({ type: "error", text: "Could not read the selected photo." });
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -86,6 +107,7 @@ export default function Profile({ driver, onLogout, onDriverUpdate, onNotify }) 
         phone: form.phone,
         plate: form.plate,
         nida: form.nida,
+        photo_url: form.photo_url,
       };
       if (form.password) payload.password = form.password;
 
@@ -113,7 +135,9 @@ export default function Profile({ driver, onLogout, onDriverUpdate, onNotify }) 
     <div className="profile-page">
       <div className="container profile-shell">
         <motion.aside initial={{ opacity: 0, x: -18 }} animate={{ opacity: 1, x: 0 }} className="profile-summary">
-          <div className="profile-avatar">{initials}</div>
+          <div className="profile-avatar">
+            {form.photo_url ? <img src={form.photo_url} alt={form.name || "Driver"} /> : initials}
+          </div>
           <h1>{form.name || "Driver Profile"}</h1>
           <p>{form.email || "Complete your account details"}</p>
 
@@ -155,6 +179,21 @@ export default function Profile({ driver, onLogout, onDriverUpdate, onNotify }) 
             <div className="profile-loading">Loading profile...</div>
           ) : (
             <form onSubmit={submit} className="profile-form">
+              <div className="profile-photo-upload">
+                <div className="profile-photo-preview">
+                  {form.photo_url ? <img src={form.photo_url} alt={form.name || "Driver"} /> : <FiUser />}
+                </div>
+                <div>
+                  <strong>Driver photo</strong>
+                  <span>Passengers will see this after you accept their ride.</span>
+                  <label className="btn btn-sm">
+                    <FiImage />
+                    Upload photo
+                    <input type="file" accept="image/*" onChange={handlePhotoChange} />
+                  </label>
+                </div>
+              </div>
+
               <div className="profile-form-grid">
                 <Field label="Full Name" icon={<FiUser />}>
                   <input required value={form.name} onChange={(e) => set("name", e.target.value)} />

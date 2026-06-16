@@ -9,8 +9,8 @@ const mqtt       = require("mqtt");
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET || "bodaconnect_secret_2025";
 
-app.use(cors({ origin: "*", methods: ["GET","POST","PATCH","DELETE","OPTIONS"] }));
-app.use(express.json());
+app.use(cors({ origin: "*", methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"] }));
+app.use(express.json({ limit: "2mb" }));
 
 // ── Prometheus ────────────────────────────────────────
 const register = new promClient.Registry();
@@ -119,6 +119,7 @@ async function syncRideStatusFromMQTT(data) {
       driver_id: driverId || previousLocation.driver_id || null,
       driver_name: data.driver_name || previousLocation.driver_name || null,
       plate: data.plate || previousLocation.plate || null,
+      driver_photo_url: data.driver_photo_url || previousLocation.driver_photo_url || null,
       progress_percent: status === "completed" ? 100 : previousLocation.progress_percent || (status === "active" ? 15 : 0),
       timestamp: data.timestamp || new Date().toISOString(),
     });
@@ -136,6 +137,7 @@ function syncDriverLocationFromMQTT(data) {
     driver_id: data.driver_id || null,
     driver_name: data.driver_name || null,
     plate: data.plate || null,
+    driver_photo_url: data.driver_photo_url || null,
     latitude: data.latitude,
     longitude: data.longitude,
     location_name: data.location_name || "On route",
@@ -251,6 +253,7 @@ async function start() {
       password VARCHAR(255) NOT NULL,
       plate VARCHAR(50),
       nida VARCHAR(50),
+      photo_url LONGTEXT,
       status ENUM('available','on_trip','offline') DEFAULT 'available',
       rating DECIMAL(3,2) DEFAULT 5.00,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -259,6 +262,12 @@ async function start() {
 
   try {
     await db.execute("ALTER TABLE drivers ADD COLUMN nida VARCHAR(50) AFTER plate");
+  } catch (err) {
+    if (err.code !== "ER_DUP_FIELDNAME") throw err;
+  }
+
+  try {
+    await db.execute("ALTER TABLE drivers ADD COLUMN photo_url LONGTEXT AFTER nida");
   } catch (err) {
     if (err.code !== "ER_DUP_FIELDNAME") throw err;
   }
@@ -346,7 +355,7 @@ async function start() {
         { id: driver.id, name: driver.name, email: driver.email, plate: driver.plate, nida: driver.nida },
         JWT_SECRET, { expiresIn: "7d" }
       );
-      res.json({ token, driver: { id: driver.id, name: driver.name, email: driver.email, phone: driver.phone, plate: driver.plate, nida: driver.nida, rating: driver.rating } });
+      res.json({ token, driver: { id: driver.id, name: driver.name, email: driver.email, phone: driver.phone, plate: driver.plate, nida: driver.nida, photo_url: driver.photo_url, rating: driver.rating } });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -355,7 +364,7 @@ async function start() {
   app.get("/auth/me", authMiddleware, async (req, res) => {
     try {
       const [rows] = await db.execute(
-        "SELECT id, name, email, phone, plate, nida, status, rating FROM drivers WHERE id=?",
+        "SELECT id, name, email, phone, plate, nida, photo_url, status, rating FROM drivers WHERE id=?",
         [req.driver.id]
       );
       if (rows.length === 0) return res.status(404).json({ error: "Driver not found" });
@@ -370,7 +379,7 @@ async function start() {
   // ═══════════════════════════════════════
 
   app.put("/auth/me", authMiddleware, async (req, res) => {
-    const { name, email, phone, plate, nida, password } = req.body;
+    const { name, email, phone, plate, nida, photo_url, password } = req.body;
 
     if (!name || !email) {
       return res.status(400).json({ error: "Name and email are required" });
@@ -387,18 +396,18 @@ async function start() {
         if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
         const hashed = await bcrypt.hash(password, 10);
         await db.execute(
-          "UPDATE drivers SET name=?, email=?, phone=?, plate=?, nida=?, password=? WHERE id=?",
-          [name, email, phone || "", plate || "", nida || "", hashed, req.driver.id]
+          "UPDATE drivers SET name=?, email=?, phone=?, plate=?, nida=?, photo_url=?, password=? WHERE id=?",
+          [name, email, phone || "", plate || "", nida || "", photo_url || "", hashed, req.driver.id]
         );
       } else {
         await db.execute(
-          "UPDATE drivers SET name=?, email=?, phone=?, plate=?, nida=? WHERE id=?",
-          [name, email, phone || "", plate || "", nida || "", req.driver.id]
+          "UPDATE drivers SET name=?, email=?, phone=?, plate=?, nida=?, photo_url=? WHERE id=?",
+          [name, email, phone || "", plate || "", nida || "", photo_url || "", req.driver.id]
         );
       }
 
       const [rows] = await db.execute(
-        "SELECT id, name, email, phone, plate, nida, status, rating FROM drivers WHERE id=?",
+        "SELECT id, name, email, phone, plate, nida, photo_url, status, rating FROM drivers WHERE id=?",
         [req.driver.id]
       );
       res.json(rows[0]);
@@ -430,7 +439,7 @@ async function start() {
   app.get("/drivers/nearby", async (req, res) => {
     try {
       const [rows] = await db.execute(
-        "SELECT id, name, plate, rating, status FROM drivers WHERE status='available' ORDER BY rating DESC, id DESC LIMIT 6"
+        "SELECT id, name, plate, photo_url, rating, status FROM drivers WHERE status='available' ORDER BY rating DESC, id DESC LIMIT 6"
       );
       res.json(rows);
     } catch (err) {
@@ -481,7 +490,7 @@ async function start() {
       const rideId = Number(req.params.id);
       const [rows] = await db.execute(
         `SELECT r.id, r.pickup, r.destination, r.status, r.driver_id, r.created_at,
-          d.name AS driver_name, d.plate AS driver_plate, d.rating AS driver_rating
+          d.name AS driver_name, d.plate AS driver_plate, d.photo_url AS driver_photo_url, d.rating AS driver_rating
          FROM rides r
          LEFT JOIN drivers d ON d.id = r.driver_id
          WHERE r.id=?`,
@@ -500,6 +509,7 @@ async function start() {
           id: ride.driver_id || latestLocation?.driver_id,
           name: latestLocation?.driver_name || ride.driver_name,
           plate: latestLocation?.plate || ride.driver_plate,
+          photo_url: latestLocation?.driver_photo_url || ride.driver_photo_url,
           rating: ride.driver_rating,
         } : null,
         driver_location: latestLocation,

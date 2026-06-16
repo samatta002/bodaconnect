@@ -294,6 +294,7 @@ export default function Ride({ onNotify }) {
   const driverPosition = driverLocation?.latitude && driverLocation?.longitude
     ? [Number(driverLocation.latitude), Number(driverLocation.longitude)]
     : null;
+  const driverPhoto = driverLocation?.driver_photo_url || assignedDriver?.photo_url;
   const liveProgress = Math.min(Number(driverLocation?.progress_percent || 0), 100);
   const progress = rideStatus === "completed" ? 100 : rideStatus === "active" ? Math.max(liveProgress, 15) : liveProgress;
 
@@ -412,8 +413,10 @@ export default function Ride({ onNotify }) {
             </div>
 
             <div className="ride-tracker-grid">
-              <div>
-                <FiTruck />
+              <div className="ride-driver-identity">
+                <span className="ride-driver-photo">
+                  {driverPhoto ? <img src={driverPhoto} alt={driverLocation?.driver_name || assignedDriver?.name || "Driver"} /> : <FiTruck />}
+                </span>
                 <span>Driver</span>
                 <strong>{driverLocation?.driver_name || assignedDriver?.name || "Pending"}</strong>
               </div>
@@ -589,8 +592,10 @@ export default function Ride({ onNotify }) {
               borderBottom: i < nearbyDrivers.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(34,197,94,0.1)",
                 color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>
-                {(d.name || "Driver").split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase()}
+                fontSize: "11px", fontWeight: 700, flexShrink: 0, overflow: "hidden" }}>
+                {d.photo_url
+                  ? <img src={d.photo_url} alt={d.name || "Driver"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : (d.name || "Driver").split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase()}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: "0.83rem", fontWeight: 600, color: "#f0f6fc" }}>{d.name || "Available driver"}</div>
