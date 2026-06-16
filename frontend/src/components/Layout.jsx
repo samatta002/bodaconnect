@@ -5,14 +5,15 @@ export default function Layout({ children, driver, onLogout, lang = "en", setLan
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const text = {
-    en: { home: "Home", ride: "Book Ride", dashboard: "Dashboard", live: "LIVE", login: "Driver Login", rights: "All rights reserved.", dev: "Developed by" },
-    sw: { home: "Nyumbani", ride: "Agiza Safari", dashboard: "Dashibodi", live: "LIVE", login: "Dereva Ingia", rights: "Haki zote zimehifadhiwa.", dev: "Imetengenezwa na" },
+    en: { home: "Home", ride: "Book Ride", dashboard: "Dashboard", profile: "Profile", live: "LIVE", login: "Driver Login", rights: "All rights reserved.", dev: "Developed by" },
+    sw: { home: "Nyumbani", ride: "Agiza Safari", dashboard: "Dashibodi", profile: "Wasifu", live: "LIVE", login: "Dereva Ingia", rights: "Haki zote zimehifadhiwa.", dev: "Imetengenezwa na" },
   }[lang] || {};
 
   const links = [
     { to: "/",     label: text.home,      Icon: FiHome      },
     ...(!driver ? [{ to: "/ride", label: text.ride, Icon: FiNavigation }] : []),
     ...(driver ? [{ to: "/dashboard", label: text.dashboard, Icon: FiGrid }] : []),
+    ...(driver ? [{ to: "/profile", label: text.profile, Icon: FiUser }] : []),
   ];
 
   const logout = () => { onLogout(); navigate("/login"); };

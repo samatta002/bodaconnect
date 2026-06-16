@@ -8,6 +8,7 @@ import Ride from "./pages/Ride";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Profile from "./pages/Profile";
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -112,6 +113,12 @@ export default function App() {
           <Route path="/dashboard"
             element={hasDriverSession
               ? <Dashboard driver={driver} onLogout={handleLogout} onDriverUpdate={handleDriverUpdate} onNotify={notify} />
+              : <Navigate to="/login" replace />
+            }
+          />
+          <Route path="/profile"
+            element={hasDriverSession
+              ? <Profile driver={driver} onLogout={handleLogout} onDriverUpdate={handleDriverUpdate} onNotify={notify} />
               : <Navigate to="/login" replace />
             }
           />

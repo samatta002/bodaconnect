@@ -1559,6 +1559,171 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   font-weight: 700;
 }
 
+.profile-page {
+  flex: 1;
+  padding: 2rem 0 3rem;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(34,197,94,0.12), transparent 30%),
+    linear-gradient(180deg, var(--bg), var(--bg2));
+}
+
+.profile-shell {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.profile-summary,
+.profile-card {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.profile-summary {
+  padding: 1.5rem;
+  position: sticky;
+  top: 84px;
+}
+
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--green), #0ea5e9);
+  color: #03120a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.45rem;
+  font-weight: 900;
+  margin-bottom: 1rem;
+}
+
+.profile-summary h1 {
+  font-size: 1.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.profile-summary p,
+.profile-card-head p,
+.profile-note span {
+  color: var(--text3);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.profile-status-grid {
+  display: grid;
+  gap: 0.7rem;
+  margin: 1.25rem 0;
+}
+
+.profile-status-grid span,
+.profile-note {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.035);
+}
+
+.profile-status-grid svg,
+.profile-note svg,
+.profile-field svg {
+  color: var(--green);
+}
+
+.profile-status-grid strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.profile-status-grid small {
+  display: block;
+  color: var(--text3);
+  font-size: 0.72rem;
+  margin-top: 0.15rem;
+}
+
+.profile-card {
+  padding: 1.5rem;
+}
+
+.profile-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.35rem;
+}
+
+.profile-card-head h2 {
+  margin: 0.7rem 0 0.25rem;
+  font-size: 1.35rem;
+}
+
+.profile-loading {
+  padding: 2rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text3);
+  text-align: center;
+}
+
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.profile-field > span {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--text2);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.profile-field > div {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.045);
+}
+
+.profile-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
+
+.profile-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
 @media (max-width: 980px) {
   .home-hero { min-height: 720px; align-items: flex-end; }
   .home-hero-shade {
@@ -1582,6 +1747,8 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   .phone-demo { grid-template-columns: 1fr; justify-items: center; }
   .register-grid { grid-template-columns: 1fr; }
   .register-visual { min-height: auto; }
+  .profile-shell { grid-template-columns: 1fr; }
+  .profile-summary { position: static; }
 }
 
 @media (max-width: 640px) {
@@ -1617,6 +1784,11 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   .register-visual { padding: 1.25rem; }
   .register-form-grid { grid-template-columns: 1fr; }
   .register-card-header { align-items: flex-start; }
+  .profile-page { padding: 1rem 0 2rem; }
+  .profile-card,
+  .profile-summary { padding: 1.15rem; }
+  .profile-form-grid { grid-template-columns: 1fr; }
+  .profile-actions .btn { width: 100%; justify-content: center; }
   .app-floating-controls {
     left: 10px;
     bottom: 10px;

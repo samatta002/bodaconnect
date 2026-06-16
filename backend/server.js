@@ -356,6 +356,44 @@ async function start() {
   // RIDES (protected)
   // ═══════════════════════════════════════
 
+  app.put("/auth/me", authMiddleware, async (req, res) => {
+    const { name, email, phone, plate, nida, password } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ error: "Name and email are required" });
+    }
+
+    try {
+      const [existing] = await db.execute(
+        "SELECT id FROM drivers WHERE email=? AND id<>?",
+        [email, req.driver.id]
+      );
+      if (existing.length > 0) return res.status(409).json({ error: "Email is already used by another driver" });
+
+      if (password) {
+        if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+        const hashed = await bcrypt.hash(password, 10);
+        await db.execute(
+          "UPDATE drivers SET name=?, email=?, phone=?, plate=?, nida=?, password=? WHERE id=?",
+          [name, email, phone || "", plate || "", nida || "", hashed, req.driver.id]
+        );
+      } else {
+        await db.execute(
+          "UPDATE drivers SET name=?, email=?, phone=?, plate=?, nida=? WHERE id=?",
+          [name, email, phone || "", plate || "", nida || "", req.driver.id]
+        );
+      }
+
+      const [rows] = await db.execute(
+        "SELECT id, name, email, phone, plate, nida, status, rating FROM drivers WHERE id=?",
+        [req.driver.id]
+      );
+      res.json(rows[0]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.patch("/driver/status", authMiddleware, async (req, res) => {
     const { mode, status } = req.body;
     const nextStatus = status || (mode === "online" ? "available" : mode === "offline" ? "offline" : null);
