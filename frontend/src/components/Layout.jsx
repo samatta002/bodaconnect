@@ -131,6 +131,24 @@ export default function Layout({ children, driver, onLogout }) {
       <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {children}
       </main>
+
+      <footer style={{
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(8,12,16,0.96)",
+        padding: "14px 2rem",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        flexWrap: "wrap",
+        color: "#484f58",
+        fontSize: "0.78rem",
+      }}>
+        <span>&copy; {new Date().getFullYear()} BodaConnect. All rights reserved.</span>
+        <span>
+          Developed by <strong style={{ color: "#22c55e", fontWeight: 600 }}>Mbwana Ally</strong>
+        </span>
+      </footer>
     </div>
   );
 }
