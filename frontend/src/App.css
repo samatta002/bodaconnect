@@ -469,8 +469,6 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
 .float-map { left: 54%; top: 22%; animation-delay: 0s; }
 .float-phone { right: 10%; top: 23%; animation-delay: 0.8s; }
 .float-shield { right: 29%; bottom: 18%; animation-delay: 1.4s; }
-.float-zap { left: 42%; bottom: 26%; animation-delay: 2.1s; }
-
 @keyframes home-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-14px); }

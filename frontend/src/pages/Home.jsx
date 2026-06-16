@@ -90,7 +90,6 @@ export default function Home() {
         <div className="home-float-icon float-map"><FiMapPin /></div>
         <div className="home-float-icon float-phone"><FiSmartphone /></div>
         <div className="home-float-icon float-shield"><FiShield /></div>
-        <div className="home-float-icon float-zap"><FiZap /></div>
 
         <div className="home-hero-content">
           <motion.div
