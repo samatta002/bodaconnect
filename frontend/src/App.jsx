@@ -12,6 +12,7 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem("bc_driver")); }
     catch { return null; }
   });
+  const hasDriverSession = Boolean(driver && localStorage.getItem("bc_token"));
 
   const handleLogin = (d) => setDriver(d);
 
@@ -23,20 +24,20 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Layout driver={driver} onLogout={handleLogout}>
+      <Layout driver={hasDriverSession ? driver : null} onLogout={handleLogout}>
         <Routes>
           <Route path="/"     element={<Home />} />
-          <Route path="/ride" element={driver ? <Navigate to="/dashboard" /> : <Ride />} />
+          <Route path="/ride" element={hasDriverSession ? <Navigate to="/dashboard" replace /> : <Ride />} />
           <Route path="/login"
-            element={driver ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />}
+            element={hasDriverSession ? <Navigate to="/dashboard" replace /> : <Login onLogin={handleLogin} />}
           />
           <Route path="/register"
-            element={driver ? <Navigate to="/dashboard" /> : <Register onLogin={handleLogin} />}
+            element={hasDriverSession ? <Navigate to="/dashboard" replace /> : <Register onLogin={handleLogin} />}
           />
           <Route path="/dashboard"
-            element={driver
+            element={hasDriverSession
               ? <Dashboard driver={driver} onLogout={handleLogout} />
-              : <Navigate to="/login" />
+              : <Navigate to="/login" replace />
             }
           />
         </Routes>
