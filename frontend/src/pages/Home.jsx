@@ -87,6 +87,10 @@ export default function Home() {
       <section className="home-hero" aria-label="BodaConnect homepage">
         <img className="home-hero-image" src="/home-hero.png" alt="BodaConnect boda boda driver ready for a ride" />
         <div className="home-hero-shade" />
+        <div className="home-float-icon float-map"><FiMapPin /></div>
+        <div className="home-float-icon float-phone"><FiSmartphone /></div>
+        <div className="home-float-icon float-shield"><FiShield /></div>
+        <div className="home-float-icon float-zap"><FiZap /></div>
 
         <div className="home-hero-content">
           <motion.div

@@ -214,11 +214,18 @@ async function start() {
       phone VARCHAR(30),
       password VARCHAR(255) NOT NULL,
       plate VARCHAR(50),
+      nida VARCHAR(50),
       status ENUM('available','on_trip','offline') DEFAULT 'available',
       rating DECIMAL(3,2) DEFAULT 5.00,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  try {
+    await db.execute("ALTER TABLE drivers ADD COLUMN nida VARCHAR(50) AFTER plate");
+  } catch (err) {
+    if (err.code !== "ER_DUP_FIELDNAME") throw err;
+  }
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS rides (
@@ -257,7 +264,7 @@ async function start() {
 
   // REGISTER
   app.post("/auth/register", async (req, res) => {
-    const { name, email, phone, password, plate } = req.body;
+    const { name, email, phone, password, plate, nida } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email and password are required" });
     }
@@ -266,11 +273,11 @@ async function start() {
       if (existing.length > 0) return res.status(409).json({ error: "Email already registered" });
       const hashed = await bcrypt.hash(password, 10);
       const [result] = await db.execute(
-        "INSERT INTO drivers (name, email, phone, password, plate) VALUES (?,?,?,?,?)",
-        [name, email, phone || "", hashed, plate || ""]
+        "INSERT INTO drivers (name, email, phone, password, plate, nida) VALUES (?,?,?,?,?,?)",
+        [name, email, phone || "", hashed, plate || "", nida || ""]
       );
-      const token = jwt.sign({ id: result.insertId, name, email, plate: plate || "" }, JWT_SECRET, { expiresIn: "7d" });
-      res.status(201).json({ token, driver: { id: result.insertId, name, email, phone, plate } });
+      const token = jwt.sign({ id: result.insertId, name, email, plate: plate || "", nida: nida || "" }, JWT_SECRET, { expiresIn: "7d" });
+      res.status(201).json({ token, driver: { id: result.insertId, name, email, phone, plate, nida } });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -287,10 +294,10 @@ async function start() {
       const valid = await bcrypt.compare(password, driver.password);
       if (!valid) return res.status(401).json({ error: "Invalid email or password" });
       const token = jwt.sign(
-        { id: driver.id, name: driver.name, email: driver.email, plate: driver.plate },
+        { id: driver.id, name: driver.name, email: driver.email, plate: driver.plate, nida: driver.nida },
         JWT_SECRET, { expiresIn: "7d" }
       );
-      res.json({ token, driver: { id: driver.id, name: driver.name, email: driver.email, phone: driver.phone, plate: driver.plate, rating: driver.rating } });
+      res.json({ token, driver: { id: driver.id, name: driver.name, email: driver.email, phone: driver.phone, plate: driver.plate, nida: driver.nida, rating: driver.rating } });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -299,7 +306,7 @@ async function start() {
   app.get("/auth/me", authMiddleware, async (req, res) => {
     try {
       const [rows] = await db.execute(
-        "SELECT id, name, email, phone, plate, status, rating FROM drivers WHERE id=?",
+        "SELECT id, name, email, phone, plate, nida, status, rating FROM drivers WHERE id=?",
         [req.driver.id]
       );
       if (rows.length === 0) return res.status(404).json({ error: "Driver not found" });
@@ -449,7 +456,7 @@ async function start() {
   app.get("/db/drivers", authMiddleware, async (req, res) => {
     try {
       const [rows] = await db.execute(
-        "SELECT id, name, email, phone, plate, status, rating, created_at FROM drivers ORDER BY id DESC"
+        "SELECT id, name, email, phone, plate, nida, status, rating, created_at FROM drivers ORDER BY id DESC"
       );
       res.json(rows);
     } catch (err) { res.status(500).json({ error: err.message }); }

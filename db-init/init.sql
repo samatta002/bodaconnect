@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS drivers (
   phone      VARCHAR(30),
   password   VARCHAR(255) NOT NULL,
   plate      VARCHAR(50),
+  nida       VARCHAR(50),
   status     ENUM('available','on_trip','offline') DEFAULT 'available',
   rating     DECIMAL(3,2) DEFAULT 5.00,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
