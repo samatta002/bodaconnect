@@ -1,6 +1,7 @@
 name: BodaConnect CD Pipeline
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["BodaConnect CI Pipeline"]
     types:
