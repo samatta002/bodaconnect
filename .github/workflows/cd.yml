@@ -240,11 +240,33 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
+            set -e
             cd ~/bodaconnect
-            git pull origin main
-            docker compose -f docker-compose.prod.yml up --build -d
+
+            echo "Fetching latest main from GitHub..."
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            echo "Deploying commit: $(git rev-parse --short HEAD)"
+
+            echo "Rebuilding application containers..."
+            docker compose -f docker-compose.prod.yml build --no-cache frontend backend
+            docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
+
+            echo "Waiting for services..."
+            sleep 15
+
+            echo "Container status:"
+            docker compose -f docker-compose.prod.yml ps
+
+            echo "Running live health checks..."
+            curl -fsS http://localhost:5000/ >/dev/null
+            curl -fsS http://localhost:5173/ >/dev/null
+            curl -fsS http://localhost:5000/mqtt/status >/dev/null
+
             echo "================================================"
             echo "  AWS EC2 DEPLOYMENT COMPLETE"
+            echo "  Commit   : $(git rev-parse --short HEAD)"
             echo "  Frontend : http://${{ secrets.EC2_HOST }}:5173"
             echo "  Backend  : http://${{ secrets.EC2_HOST }}:5000"
             echo "================================================"
