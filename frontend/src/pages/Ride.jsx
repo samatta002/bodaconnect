@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { FiNavigation, FiMapPin, FiCheck, FiX, FiChevronDown, FiLoader, FiClock, FiTruck, FiUser } from "react-icons/fi";
+import { FiNavigation, FiMapPin, FiCheck, FiX, FiChevronDown, FiLoader, FiClock, FiTruck, FiUser, FiStar, FiMessageSquare } from "react-icons/fi";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -187,6 +187,10 @@ export default function Ride({ onNotify }) {
   const [tracking, setTracking]       = useState(null);
   const [toast, setToast]             = useState(null);
   const [nearbyDrivers, setNearbyDrivers] = useState([]);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [submittedReview, setSubmittedReview] = useState(null);
   const notify = (nextToast) => {
     if (onNotify) onNotify(nextToast);
     else setToast(nextToast);
@@ -235,7 +239,7 @@ export default function Ride({ onNotify }) {
   const reset = () => {
     setPickup(null); setDestination(null);
     setStatus("idle"); setRideId(null); setRideStatus(null);
-    setTracking(null); setToast(null);
+    setTracking(null); setToast(null); setSubmittedReview(null); setReviewRating(5); setReviewComment("");
   };
 
   useEffect(() => {
@@ -248,6 +252,7 @@ export default function Ride({ onNotify }) {
         const nextStatus = res.data?.ride?.status || "pending";
         setRideStatus(nextStatus);
         setTracking(res.data || null);
+        setSubmittedReview(res.data?.review || null);
 
         if (previousStatus && previousStatus !== nextStatus) {
           const message = {
@@ -291,6 +296,25 @@ export default function Ride({ onNotify }) {
     : null;
   const liveProgress = Math.min(Number(driverLocation?.progress_percent || 0), 100);
   const progress = rideStatus === "completed" ? 100 : rideStatus === "active" ? Math.max(liveProgress, 15) : liveProgress;
+
+  const submitReview = async (e) => {
+    e.preventDefault();
+    if (!rideId || submittedReview) return;
+
+    setSubmittingReview(true);
+    try {
+      const res = await axios.post(`/api/rides/${rideId}/review`, {
+        rating: reviewRating,
+        comment: reviewComment,
+      });
+      setSubmittedReview(res.data);
+      notify({ type: "success", text: "Thanks for rating your ride." });
+    } catch (err) {
+      notify({ type: "error", text: err.response?.data?.error || "Could not submit review." });
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden" }}>
@@ -414,6 +438,70 @@ export default function Ride({ onNotify }) {
                       "Driver location will appear after acceptance.")}
               </span>
             </div>
+          </motion.div>
+        )}
+
+        {status === "success" && rideStatus === "completed" && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="ride-review-card"
+          >
+            {submittedReview ? (
+              <>
+                <div className="ride-review-head">
+                  <div>
+                    <span>Ride Review</span>
+                    <strong>Review submitted</strong>
+                  </div>
+                  <div className="ride-review-stars readonly">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <FiStar key={star} className={star <= submittedReview.rating ? "active" : ""} />
+                    ))}
+                  </div>
+                </div>
+                {submittedReview.comment && (
+                  <p className="ride-review-comment">{submittedReview.comment}</p>
+                )}
+              </>
+            ) : (
+              <form onSubmit={submitReview}>
+                <div className="ride-review-head">
+                  <div>
+                    <span>Rate Your Ride</span>
+                    <strong>{assignedDriver?.name || driverLocation?.driver_name || "Your driver"}</strong>
+                  </div>
+                </div>
+
+                <div className="ride-review-stars" aria-label="Choose ride rating">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className={star <= reviewRating ? "active" : ""}
+                      aria-label={`${star} star rating`}
+                    >
+                      <FiStar />
+                    </button>
+                  ))}
+                </div>
+
+                <label className="ride-review-input">
+                  <FiMessageSquare />
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    maxLength={300}
+                    placeholder="Optional comment about your trip"
+                  />
+                </label>
+
+                <button className="btn btn-green" type="submit" disabled={submittingReview}>
+                  {submittingReview ? "Submitting..." : "Submit review"}
+                </button>
+              </form>
+            )}
           </motion.div>
         )}
 

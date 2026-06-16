@@ -19,3 +19,14 @@ CREATE TABLE IF NOT EXISTS rides (
   driver_id   INT DEFAULT NULL,
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS ride_reviews (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  ride_id    INT NOT NULL UNIQUE,
+  driver_id  INT NOT NULL,
+  rating     INT NOT NULL,
+  comment    TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_review_ride FOREIGN KEY (ride_id) REFERENCES rides(id) ON DELETE CASCADE,
+  CONSTRAINT fk_review_driver FOREIGN KEY (driver_id) REFERENCES drivers(id) ON DELETE CASCADE
+);

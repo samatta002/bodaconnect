@@ -276,6 +276,19 @@ async function start() {
 
   console.log("✅ Tables ready");
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS ride_reviews (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      ride_id INT NOT NULL UNIQUE,
+      driver_id INT NOT NULL,
+      rating INT NOT NULL,
+      comment TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_review_ride FOREIGN KEY (ride_id) REFERENCES rides(id) ON DELETE CASCADE,
+      CONSTRAINT fk_review_driver FOREIGN KEY (driver_id) REFERENCES drivers(id) ON DELETE CASCADE
+    )
+  `);
+
   const [activeRows] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status='active'");
   activeRidesGauge.set(activeRows[0].count);
   const [revRows] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status='completed'");
@@ -477,6 +490,10 @@ async function start() {
       if (rows.length === 0) return res.status(404).json({ error: "Ride not found" });
       const ride = rows[0];
       const latestLocation = latestRideLocations.get(rideId) || null;
+      const [reviewRows] = await db.execute(
+        "SELECT id, rating, comment, created_at FROM ride_reviews WHERE ride_id=?",
+        [rideId]
+      );
       res.json({
         ride,
         driver: ride.driver_id || latestLocation?.driver_id ? {
@@ -486,8 +503,58 @@ async function start() {
           rating: ride.driver_rating,
         } : null,
         driver_location: latestLocation,
+        review: reviewRows[0] || null,
       });
     } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/rides/:id/review", async (req, res) => {
+    const rideId = Number(req.params.id);
+    const rating = Number(req.body.rating);
+    const comment = (req.body.comment || "").trim();
+
+    if (!Number.isInteger(rideId)) return res.status(400).json({ error: "Invalid ride id" });
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5" });
+    }
+
+    try {
+      const [rides] = await db.execute(
+        "SELECT id, status, driver_id FROM rides WHERE id=?",
+        [rideId]
+      );
+      if (rides.length === 0) return res.status(404).json({ error: "Ride not found" });
+
+      const ride = rides[0];
+      if (ride.status !== "completed") return res.status(400).json({ error: "Only completed rides can be reviewed" });
+      if (!ride.driver_id) return res.status(400).json({ error: "Ride has no assigned driver" });
+
+      const [result] = await db.execute(
+        "INSERT INTO ride_reviews (ride_id, driver_id, rating, comment) VALUES (?,?,?,?)",
+        [rideId, ride.driver_id, rating, comment]
+      );
+
+      const [[avg]] = await db.execute(
+        "SELECT AVG(rating) AS rating FROM ride_reviews WHERE driver_id=?",
+        [ride.driver_id]
+      );
+      const nextRating = Number(avg.rating || 5).toFixed(2);
+      await db.execute("UPDATE drivers SET rating=? WHERE id=?", [nextRating, ride.driver_id]);
+
+      res.status(201).json({
+        id: result.insertId,
+        ride_id: rideId,
+        driver_id: ride.driver_id,
+        rating,
+        comment,
+        driver_rating: nextRating,
+      });
+    } catch (err) {
+      if (err.code === "ER_DUP_ENTRY") {
+        return res.status(409).json({ error: "This ride has already been reviewed" });
+      }
       res.status(500).json({ error: err.message });
     }
   });

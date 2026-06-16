@@ -546,6 +546,107 @@ table thead th {
   flex-shrink: 0;
 }
 
+.ride-review-card {
+  margin: 0 1.25rem 1rem;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.ride-review-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.ride-review-head span {
+  display: block;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+}
+
+.ride-review-head strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.ride-review-stars {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+.ride-review-stars button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ride-review-stars button.active,
+.ride-review-stars.readonly svg.active {
+  color: var(--amber);
+}
+
+.ride-review-stars.readonly {
+  margin-bottom: 0;
+}
+
+.ride-review-input {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  margin-bottom: 0.85rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+}
+
+.ride-review-input svg {
+  color: var(--green);
+  margin-top: 0.2rem;
+}
+
+.ride-review-input textarea {
+  min-height: 76px;
+  resize: vertical;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.ride-review-card .btn {
+  width: 100%;
+}
+
+.ride-review-comment {
+  color: var(--text2);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  padding: 0.8rem;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+}
+
 .driver-live-marker {
   background: transparent;
   border: 0;
