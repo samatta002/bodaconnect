@@ -246,6 +246,10 @@ jobs:
             echo "Fetching latest main from GitHub..."
             git fetch origin main
             git checkout main
+
+            echo "Saving EC2-local runtime changes before pulling..."
+            git stash push --include-untracked -m "pre-deploy-runtime-files-$(date +%Y%m%d%H%M%S)" || true
+
             git pull --ff-only origin main
             echo "Deploying commit: $(git rev-parse --short HEAD)"
 
