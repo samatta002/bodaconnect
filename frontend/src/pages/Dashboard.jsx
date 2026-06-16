@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   FiTruck, FiCheckCircle, FiClock, FiDollarSign,
   FiRefreshCw, FiAlertCircle, FiActivity,
-  FiArrowUpRight, FiArrowDownRight, FiStar,
+  FiArrowUpRight, FiArrowDownRight, FiStar, FiPower,
 } from "react-icons/fi";
 
 const API = "/api";
@@ -25,12 +25,15 @@ function StatusBadge({ status }) {
   return <span className={`badge ${cls}`}>{label}</span>;
 }
 
-export default function Dashboard({ driver, onLogout }) {
+export default function Dashboard({ driver, onLogout, onDriverUpdate }) {
   const [rides, setRides]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [accepting, setAccepting] = useState(null);
   const [hovered, setHovered]     = useState(null);
+  const [driverStatus, setDriverStatus] = useState(driver?.status || "available");
+  const [savingStatus, setSavingStatus] = useState(false);
+  const isOnline = driverStatus !== "offline";
 
   const fetchRides = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -51,6 +54,27 @@ export default function Dashboard({ driver, onLogout }) {
     const timer = setInterval(() => fetchRides({ silent: true }), 3000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    setDriverStatus(driver?.status || "available");
+  }, [driver?.status]);
+
+  const toggleDriverMode = async () => {
+    const nextStatus = isOnline ? "offline" : "available";
+    setSavingStatus(true);
+    setError(null);
+
+    try {
+      const res = await axios.patch(`${API}/driver/status`, { status: nextStatus }, getAuth());
+      setDriverStatus(res.data.status);
+      onDriverUpdate?.({ status: res.data.status });
+    } catch (err) {
+      if (err.response?.status === 401) onLogout();
+      else setError("Failed to update driver mode.");
+    } finally {
+      setSavingStatus(false);
+    }
+  };
 
   const acceptRide = async (ride) => {
     setAccepting(ride.id);
@@ -123,6 +147,19 @@ export default function Dashboard({ driver, onLogout }) {
             <div style={{ fontWeight: 600, fontSize: "0.95rem", marginBottom: 2 }}>{driver?.name}</div>
             <div style={{ fontSize: "0.78rem", color: "var(--text3)" }}>{driver?.email}</div>
           </div>
+          <button
+            type="button"
+            onClick={toggleDriverMode}
+            disabled={savingStatus}
+            className={`driver-mode-toggle ${isOnline ? "online" : "offline"}`}
+            aria-pressed={isOnline}
+          >
+            <span className="driver-mode-dot"><FiPower size={12} /></span>
+            <span>
+              <strong>Driver Mode</strong>
+              <small>{savingStatus ? "Updating..." : isOnline ? "Online" : "Offline"}</small>
+            </span>
+          </button>
           {driver?.plate && (
             <div style={{
               padding: "4px 12px", borderRadius: 9999,

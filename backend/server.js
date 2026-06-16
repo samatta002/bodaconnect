@@ -320,6 +320,26 @@ async function start() {
   // RIDES (protected)
   // ═══════════════════════════════════════
 
+  app.patch("/driver/status", authMiddleware, async (req, res) => {
+    const { mode, status } = req.body;
+    const nextStatus = status || (mode === "online" ? "available" : mode === "offline" ? "offline" : null);
+
+    if (!["available", "offline"].includes(nextStatus)) {
+      return res.status(400).json({ error: "Driver status must be online or offline" });
+    }
+
+    try {
+      await db.execute("UPDATE drivers SET status=? WHERE id=?", [nextStatus, req.driver.id]);
+      res.json({
+        success: true,
+        status: nextStatus,
+        mode: nextStatus === "available" ? "online" : "offline",
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/rides", authMiddleware, async (req, res) => {
     try {
       const [rows] = await db.execute("SELECT * FROM rides ORDER BY id DESC");
