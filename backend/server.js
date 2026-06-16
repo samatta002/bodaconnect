@@ -53,6 +53,63 @@ function authMiddleware(req, res, next) {
 const MQTT_HOST = process.env.MQTT_HOST || "localhost";
 const MQTT_PORT = process.env.MQTT_PORT || 1883;
 let mqttClient = null;
+let dbConnection = null;
+
+function normalizeRideStatus(status) {
+  if (status === "rejected") return "cancelled";
+  if (["pending", "active", "completed", "cancelled"].includes(status)) return status;
+  return null;
+}
+
+async function syncRideStatusFromMQTT(data) {
+  if (!dbConnection || !data?.ride_id || !data?.status) return;
+
+  const status = normalizeRideStatus(data.status);
+  if (!status) {
+    console.log(`Ignoring unsupported MQTT ride status: ${data.status}`);
+    return;
+  }
+
+  const rideId = Number(data.ride_id);
+  const driverId = data.driver_id ? Number(data.driver_id) : null;
+  if (!Number.isInteger(rideId)) return;
+
+  const [currentRows] = await dbConnection.execute(
+    "SELECT status FROM rides WHERE id=?",
+    [rideId]
+  );
+
+  if (currentRows.length === 0) {
+    console.log(`MQTT ride/status ignored; ride #${rideId} is not in the database`);
+    return;
+  }
+
+  const previousStatus = currentRows[0].status;
+  await dbConnection.execute(
+    "UPDATE rides SET status=?, driver_id=COALESCE(?, driver_id) WHERE id=?",
+    [status, driverId, rideId]
+  );
+
+  if (previousStatus !== status) {
+    if (status === "active") ridesAccepted.inc();
+
+    if (previousStatus !== "active" && status === "active") {
+      activeRidesGauge.inc();
+    }
+
+    if (previousStatus === "active" && ["completed", "cancelled"].includes(status)) {
+      activeRidesGauge.dec();
+    }
+
+    if (status === "completed") {
+      ridesCompleted.inc();
+      const [rev] = await dbConnection.execute("SELECT COUNT(*) as count FROM rides WHERE status='completed'");
+      revenueGauge.set(rev[0].count * 3200);
+    }
+  }
+
+  console.log(`Synced ride #${rideId} from MQTT: ${previousStatus} -> ${status}`);
+}
 
 function connectMQTT() {
   const url = `mqtt://${MQTT_HOST}:${MQTT_PORT}`;
@@ -79,9 +136,12 @@ function connectMQTT() {
     });
   });
 
-  mqttClient.on("message", (topic, message) => {
+  mqttClient.on("message", async (topic, message) => {
     try {
       const data = JSON.parse(message.toString());
+      if (topic === "ride/status") {
+        await syncRideStatusFromMQTT(data);
+      }
       console.log(`📨 MQTT [${topic}]:`, data);
     } catch {
       console.log(`📨 MQTT [${topic}]: ${message.toString()}`);
@@ -144,6 +204,7 @@ async function start() {
 
   // Connect to DB
   const db = await waitForDB();
+  dbConnection = db;
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS drivers (
@@ -288,6 +349,19 @@ async function start() {
   });
 
   // PATCH /rides/:id/status — driver accepts or completes
+  app.get("/rides/:id", async (req, res) => {
+    try {
+      const [rows] = await db.execute(
+        "SELECT id, pickup, destination, status, driver_id, created_at FROM rides WHERE id=?",
+        [req.params.id]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: "Ride not found" });
+      res.json(rows[0]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.patch("/rides/:id/status", authMiddleware, async (req, res) => {
     const { status } = req.body;
     try {

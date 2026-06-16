@@ -1,107 +1,181 @@
-// driver.js — Simulates a driver receiving ride requests
-// accepting rides and publishing location updates
+// driver.js - interactive driver simulator for responding to MQTT ride requests
 
 const mqtt = require("mqtt");
+const readline = require("readline");
 
-const client = mqtt.connect("mqtt://localhost:1883", {
-  clientId: "driver-simulator",
-  clean: true,
-});
+const MQTT_HOST = process.env.MQTT_HOST || "localhost";
+const MQTT_PORT = process.env.MQTT_PORT || "1883";
+const MQTT_USE_TLS = process.env.MQTT_USE_TLS === "true";
+const MQTT_USERNAME = process.env.MQTT_USERNAME;
+const MQTT_PASSWORD = process.env.MQTT_PASSWORD;
+const protocol = MQTT_USE_TLS ? "mqtts" : "mqtt";
+const brokerUrl = `${protocol}://${MQTT_HOST}:${MQTT_PORT}`;
 
 const DRIVER = {
-  id: 1,
-  name: "Mbwana Tupa",
-  plate: "T 234 ABC",
+  id: Number(process.env.DRIVER_ID || 1),
+  name: process.env.DRIVER_NAME || "Mbwana Tupa",
+  plate: process.env.DRIVER_PLATE || "T 234 ABC",
 };
 
-// Dar es Salaam locations for simulation
-const LOCATIONS = [
-  { name: "Kariakoo Market",     lat: -6.8160, lng: 39.2738 },
-  { name: "Posta CBD",           lat: -6.8150, lng: 39.2900 },
-  { name: "Mlimani City Mall",   lat: -6.7726, lng: 39.2285 },
-  { name: "Ubungo Terminal",     lat: -6.7961, lng: 39.2200 },
-  { name: "Msasani Beach",       lat: -6.7620, lng: 39.2850 },
-];
+const clientOptions = {
+  clientId: `driver-simulator-${DRIVER.id}-${Date.now()}`,
+  clean: true,
+  connectTimeout: 10000,
+  reconnectPeriod: 3000,
+};
 
-let locationIndex = 0;
+if (MQTT_USERNAME) {
+  clientOptions.username = MQTT_USERNAME;
+  clientOptions.password = MQTT_PASSWORD || "";
+}
 
-console.log("\n🏍  BodaConnect Driver Simulator");
-console.log("==================================\n");
-console.log(`Driver : ${DRIVER.name}`);
-console.log(`Plate  : ${DRIVER.plate}\n`);
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
 
-client.on("connect", () => {
-  console.log("✅ Driver connected to MQTT broker\n");
-
-  // Subscribe to ride requests
-  client.subscribe("ride/request", (err) => {
-    if (!err) console.log("📩 Subscribed to: ride/request");
+function ask(question) {
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => resolve(answer.trim()));
   });
+}
 
-  // Publish driver location every 5 seconds (Option B)
-  console.log("📍 Publishing location every 5 seconds...\n");
-  setInterval(() => {
-    const loc = LOCATIONS[locationIndex % LOCATIONS.length];
-    locationIndex++;
+function publish(topic, payload) {
+  client.publish(
+    topic,
+    JSON.stringify({ ...payload, timestamp: new Date().toISOString() }),
+    { qos: 1 }
+  );
+}
 
-    const locationUpdate = {
+function interpolate(start, end, progress) {
+  return {
+    latitude: Number((start.latitude + (end.latitude - start.latitude) * progress).toFixed(6)),
+    longitude: Number((start.longitude + (end.longitude - start.longitude) * progress).toFixed(6)),
+  };
+}
+
+function startTripSimulation(ride) {
+  const pickup = ride.pickup_location || { latitude: -6.8160, longitude: 39.2738 };
+  const destination = ride.destination_location || { latitude: -6.7726, longitude: 39.2285 };
+  const steps = Number(process.env.TRIP_STEPS || 10);
+  const intervalMs = Number(process.env.TRIP_INTERVAL_MS || 5000);
+  let step = 0;
+
+  console.log(`\nStarting live location updates for ride #${ride.ride_id}`);
+  console.log(`Updates: ${steps} steps, every ${intervalMs / 1000}s\n`);
+
+  const timer = setInterval(() => {
+    step += 1;
+    const progress = Math.min(step / steps, 1);
+    const location = interpolate(pickup, destination, progress);
+
+    publish("driver/location", {
+      ride_id: ride.ride_id,
       driver_id: DRIVER.id,
       driver_name: DRIVER.name,
       plate: DRIVER.plate,
-      latitude: loc.lat + (Math.random() * 0.001),  // Slight variation
-      longitude: loc.lng + (Math.random() * 0.001),
-      location_name: loc.name,
-      timestamp: new Date().toISOString(),
-    };
+      latitude: location.latitude,
+      longitude: location.longitude,
+      location_name: progress >= 1 ? ride.destination : `On route to ${ride.destination}`,
+      progress_percent: Math.round(progress * 100),
+    });
 
-    console.log(`📤 Publishing location: ${loc.name}`);
-    client.publish("driver/location", JSON.stringify(locationUpdate), { qos: 1 });
-  }, 5000);
-});
+    console.log(`Location sent for ride #${ride.ride_id}: ${Math.round(progress * 100)}%`);
 
-// Listen for ride requests
-client.on("message", (topic, message) => {
-  const data = JSON.parse(message.toString());
-  console.log(`\n📨 Received on [${topic}]:`);
-
-  if (topic === "ride/request") {
-    console.log(`  Ride ID     : ${data.ride_id}`);
-    console.log(`  Pickup      : ${data.pickup}`);
-    console.log(`  Destination : ${data.destination}`);
-    console.log(`  Time        : ${data.timestamp}`);
-
-    // Driver accepts the ride after 3 seconds
-    setTimeout(() => {
-      const statusUpdate = {
-        ride_id: data.ride_id,
+    if (progress >= 1) {
+      clearInterval(timer);
+      publish("ride/status", {
+        ride_id: ride.ride_id,
         driver_id: DRIVER.id,
         driver_name: DRIVER.name,
         plate: DRIVER.plate,
-        status: "active",
-        message: "Driver accepted — on the way",
-        timestamp: new Date().toISOString(),
-      };
+        status: "completed",
+        message: "Ride completed successfully",
+      });
+      console.log(`Ride #${ride.ride_id} completed\n`);
+    }
+  }, intervalMs);
+}
 
-      console.log(`\n✅ Driver accepting ride #${data.ride_id}...`);
-      console.log("📤 Publishing to ride/status:", JSON.stringify(statusUpdate, null, 2));
-      client.publish("ride/status", JSON.stringify(statusUpdate), { qos: 1 });
+async function handleRideRequest(ride) {
+  console.log("\nNew ride request");
+  console.log(`Ride ID     : ${ride.ride_id}`);
+  console.log(`Pickup      : ${ride.pickup}`);
+  console.log(`Destination : ${ride.destination}`);
+  console.log(`Message     : ${ride.message || ""}`);
 
-      // Complete the ride after 10 seconds
-      setTimeout(() => {
-        const completedUpdate = {
-          ...statusUpdate,
-          status: "completed",
-          message: "Ride completed successfully",
-          timestamp: new Date().toISOString(),
-        };
-        console.log(`\n🏁 Completing ride #${data.ride_id}...`);
-        client.publish("ride/status", JSON.stringify(completedUpdate), { qos: 1 });
-      }, 10000);
+  const answer = (await ask("Accept this ride? (y/n): ")).toLowerCase();
 
-    }, 3000);
+  if (answer !== "y" && answer !== "yes") {
+    publish("ride/status", {
+      ride_id: ride.ride_id,
+      driver_id: DRIVER.id,
+      driver_name: DRIVER.name,
+      plate: DRIVER.plate,
+      status: "rejected",
+      message: "Driver rejected the ride",
+    });
+    console.log(`Ride #${ride.ride_id} rejected\n`);
+    return;
   }
+
+  publish("ride/status", {
+    ride_id: ride.ride_id,
+    driver_id: DRIVER.id,
+    driver_name: DRIVER.name,
+    plate: DRIVER.plate,
+    status: "active",
+    message: "Driver accepted - on the way",
+  });
+
+  console.log(`Ride #${ride.ride_id} accepted`);
+  startTripSimulation(ride);
+}
+
+const client = mqtt.connect(brokerUrl, clientOptions);
+
+console.log("\nBodaConnect Driver Simulator");
+console.log("============================");
+console.log(`Broker: ${brokerUrl}`);
+console.log(`Driver: ${DRIVER.name}`);
+console.log(`Plate : ${DRIVER.plate}\n`);
+
+client.on("connect", () => {
+  console.log("Driver connected to MQTT broker\n");
+
+  client.subscribe("ride/request", (err) => {
+    if (err) console.error("Failed to subscribe to ride/request:", err.message);
+    else console.log("Waiting for ride requests on: ride/request\n");
+  });
+});
+
+client.on("message", (topic, message) => {
+  if (topic !== "ride/request") return;
+
+  let ride;
+  try {
+    ride = JSON.parse(message.toString());
+  } catch {
+    console.log(`Received non-JSON ride request: ${message.toString()}`);
+    return;
+  }
+
+  handleRideRequest(ride).catch((err) => {
+    console.error("Failed to handle ride request:", err.message || err);
+  });
 });
 
 client.on("error", (err) => {
-  console.error("❌ Connection error:", err.message);
+  console.error("Connection error:", err.message || err);
+});
+
+client.on("offline", () => {
+  console.error("MQTT client is offline. Check the broker host, port, and AWS security group.");
+});
+
+process.on("SIGINT", () => {
+  rl.close();
+  client.end(true);
+  process.exit(0);
 });
