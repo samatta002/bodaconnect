@@ -178,12 +178,6 @@ function MapClickHandler({ setPickup, setDestination, pickup }) {
   return null;
 }
 
-const NEARBY = [
-  { initials: "JM", name: "James Mwangi",  dist: "0.8 km", eta: "2 min", rating: "4.9" },
-  { initials: "AO", name: "Aisha Omar",    dist: "1.2 km", eta: "3 min", rating: "4.7" },
-  { initials: "PK", name: "Peter Kimani",  dist: "2.0 km", eta: "5 min", rating: "4.8" },
-];
-
 export default function Ride() {
   const [pickup, setPickup]           = useState(null);
   const [destination, setDestination] = useState(null);
@@ -192,6 +186,7 @@ export default function Ride() {
   const [rideStatus, setRideStatus]   = useState(null);
   const [tracking, setTracking]       = useState(null);
   const [toast, setToast]             = useState(null);
+  const [nearbyDrivers, setNearbyDrivers] = useState([]);
 
   const dist = calcDist(pickup, destination);
   const fare = dist ? Math.round(dist * FARE_PER_KM) : null;
@@ -216,6 +211,21 @@ export default function Ride() {
       setStatus("error");
     }
   };
+
+  useEffect(() => {
+    const fetchNearbyDrivers = async () => {
+      try {
+        const res = await axios.get("/api/drivers/nearby");
+        setNearbyDrivers(Array.isArray(res.data) ? res.data : []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchNearbyDrivers();
+    const timer = setInterval(fetchNearbyDrivers, 8000);
+    return () => clearInterval(timer);
+  }, []);
 
   const reset = () => {
     setPickup(null); setDestination(null);
@@ -270,10 +280,12 @@ export default function Ride() {
     cancelled: "Ride was cancelled.",
   }[rideStatus] || "Waiting for ride updates.";
   const driverLocation = tracking?.driver_location;
+  const assignedDriver = tracking?.driver;
   const driverPosition = driverLocation?.latitude && driverLocation?.longitude
     ? [Number(driverLocation.latitude), Number(driverLocation.longitude)]
     : null;
-  const progress = Math.min(Number(driverLocation?.progress_percent || 0), 100);
+  const liveProgress = Math.min(Number(driverLocation?.progress_percent || 0), 100);
+  const progress = rideStatus === "completed" ? 100 : rideStatus === "active" ? Math.max(liveProgress, 15) : liveProgress;
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden" }}>
@@ -374,12 +386,12 @@ export default function Ride() {
               <div>
                 <FiTruck />
                 <span>Driver</span>
-                <strong>{driverLocation?.driver_name || "Pending"}</strong>
+                <strong>{driverLocation?.driver_name || assignedDriver?.name || "Pending"}</strong>
               </div>
               <div>
                 <FiUser />
                 <span>Plate</span>
-                <strong>{driverLocation?.plate || "Waiting"}</strong>
+                <strong>{driverLocation?.plate || assignedDriver?.plate || "Waiting"}</strong>
               </div>
               <div>
                 <FiClock />
@@ -390,7 +402,12 @@ export default function Ride() {
 
             <div className="ride-tracker-location">
               <FiMapPin />
-              <span>{driverLocation?.location_name || "Driver location will appear after acceptance."}</span>
+              <span>
+                {driverLocation?.location_name ||
+                  (rideStatus === "completed" ? "Trip completed." :
+                    rideStatus === "active" ? "Driver accepted. Waiting for live location update." :
+                      "Driver location will appear after acceptance.")}
+              </span>
             </div>
           </motion.div>
         )}
@@ -469,19 +486,24 @@ export default function Ride() {
           <div style={{ fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#484f58", marginBottom: 12 }}>
             Nearby Drivers
           </div>
-          {NEARBY.map((d, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0",
-              borderBottom: i < 2 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+          {nearbyDrivers.length === 0 && (
+            <div style={{ fontSize: "0.8rem", color: "#8b949e", lineHeight: 1.55 }}>
+              No online drivers yet. Drivers appear here when they switch Driver Mode online.
+            </div>
+          )}
+          {nearbyDrivers.map((d, i) => (
+            <div key={d.id || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0",
+              borderBottom: i < nearbyDrivers.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(34,197,94,0.1)",
                 color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>
-                {d.initials}
+                {(d.name || "Driver").split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase()}
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "0.83rem", fontWeight: 600, color: "#f0f6fc" }}>{d.name}</div>
-                <div style={{ fontSize: "0.72rem", color: "#484f58" }}>{d.dist} away · {d.eta}</div>
+                <div style={{ fontSize: "0.83rem", fontWeight: 600, color: "#f0f6fc" }}>{d.name || "Available driver"}</div>
+                <div style={{ fontSize: "0.72rem", color: "#484f58" }}>{d.plate || "No plate"} - Online</div>
               </div>
-              <div style={{ fontSize: "0.75rem", color: "#f59e0b" }}>★ {d.rating}</div>
+              <div style={{ fontSize: "0.75rem", color: "#f59e0b" }}>Rating {d.rating || "5.00"}</div>
             </div>
           ))}
         </div>

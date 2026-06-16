@@ -110,6 +110,19 @@ async function syncRideStatusFromMQTT(data) {
   }
 
   console.log(`Synced ride #${rideId} from MQTT: ${previousStatus} -> ${status}`);
+
+  if (data.driver_name || data.plate) {
+    const previousLocation = latestRideLocations.get(rideId) || {};
+    latestRideLocations.set(rideId, {
+      ...previousLocation,
+      ride_id: rideId,
+      driver_id: driverId || previousLocation.driver_id || null,
+      driver_name: data.driver_name || previousLocation.driver_name || null,
+      plate: data.plate || previousLocation.plate || null,
+      progress_percent: status === "completed" ? 100 : previousLocation.progress_percent || (status === "active" ? 15 : 0),
+      timestamp: data.timestamp || new Date().toISOString(),
+    });
+  }
 }
 
 function syncDriverLocationFromMQTT(data) {
@@ -363,6 +376,17 @@ async function start() {
     }
   });
 
+  app.get("/drivers/nearby", async (req, res) => {
+    try {
+      const [rows] = await db.execute(
+        "SELECT id, name, plate, rating, status FROM drivers WHERE status='available' ORDER BY rating DESC, id DESC LIMIT 6"
+      );
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/rides", authMiddleware, async (req, res) => {
     try {
       const [rows] = await db.execute("SELECT * FROM rides ORDER BY id DESC");
@@ -405,13 +429,25 @@ async function start() {
     try {
       const rideId = Number(req.params.id);
       const [rows] = await db.execute(
-        "SELECT id, pickup, destination, status, driver_id, created_at FROM rides WHERE id=?",
+        `SELECT r.id, r.pickup, r.destination, r.status, r.driver_id, r.created_at,
+          d.name AS driver_name, d.plate AS driver_plate, d.rating AS driver_rating
+         FROM rides r
+         LEFT JOIN drivers d ON d.id = r.driver_id
+         WHERE r.id=?`,
         [rideId]
       );
       if (rows.length === 0) return res.status(404).json({ error: "Ride not found" });
+      const ride = rows[0];
+      const latestLocation = latestRideLocations.get(rideId) || null;
       res.json({
-        ride: rows[0],
-        driver_location: latestRideLocations.get(rideId) || null,
+        ride,
+        driver: ride.driver_id || latestLocation?.driver_id ? {
+          id: ride.driver_id || latestLocation?.driver_id,
+          name: latestLocation?.driver_name || ride.driver_name,
+          plate: latestLocation?.plate || ride.driver_plate,
+          rating: ride.driver_rating,
+        } : null,
+        driver_location: latestLocation,
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -483,17 +519,19 @@ async function start() {
 
   // ── OPTION B: Driver publishes location ──────────────
   app.post("/driver/location", authMiddleware, async (req, res) => {
-    const { latitude, longitude, location_name } = req.body;
+    const { ride_id, latitude, longitude, location_name, progress_percent } = req.body;
     if (!latitude || !longitude) {
       return res.status(400).json({ error: "latitude and longitude are required" });
     }
     mqttPublish("driver/location", {
+      ride_id,
       driver_id: req.driver.id,
       driver_name: req.driver.name,
       plate: req.driver.plate,
       latitude,
       longitude,
       location_name: location_name || "Unknown",
+      progress_percent,
     });
     res.json({ success: true, message: "Location published to MQTT" });
   });
