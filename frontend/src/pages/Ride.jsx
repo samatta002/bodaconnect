@@ -178,7 +178,7 @@ function MapClickHandler({ setPickup, setDestination, pickup }) {
   return null;
 }
 
-export default function Ride() {
+export default function Ride({ onNotify }) {
   const [pickup, setPickup]           = useState(null);
   const [destination, setDestination] = useState(null);
   const [status, setStatus]           = useState("idle");
@@ -187,6 +187,10 @@ export default function Ride() {
   const [tracking, setTracking]       = useState(null);
   const [toast, setToast]             = useState(null);
   const [nearbyDrivers, setNearbyDrivers] = useState([]);
+  const notify = (nextToast) => {
+    if (onNotify) onNotify(nextToast);
+    else setToast(nextToast);
+  };
 
   const dist = calcDist(pickup, destination);
   const fare = dist ? Math.round(dist * FARE_PER_KM) : null;
@@ -204,10 +208,11 @@ export default function Ride() {
       setRideId(res.data?.id || "—");
       setRideStatus(res.data?.status || "pending");
       setTracking(null);
-      setToast({ type: "success", text: "Ride request sent. Waiting for a driver." });
+      notify({ type: "success", text: "Ride request sent. Waiting for a driver." });
       setStatus("success");
     } catch (err) {
       console.error(err);
+      notify({ type: "error", text: "Ride request failed. Please try again." });
       setStatus("error");
     }
   };
@@ -250,7 +255,7 @@ export default function Ride() {
             completed: "Ride completed successfully.",
             cancelled: "Ride was cancelled.",
           }[nextStatus];
-          if (message) setToast({ type: nextStatus === "cancelled" ? "error" : "success", text: message });
+          if (message) notify({ type: nextStatus === "cancelled" ? "error" : "success", text: message });
         }
         previousStatus = nextStatus;
       } catch (err) {
@@ -311,7 +316,7 @@ export default function Ride() {
 
         {/* Success banner */}
         <AnimatePresence>
-          {toast && (
+          {!onNotify && toast && (
             <motion.div
               initial={{ opacity: 0, y: -12 }}
               animate={{ opacity: 1, y: 0 }}

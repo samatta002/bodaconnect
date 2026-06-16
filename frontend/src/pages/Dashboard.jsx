@@ -25,7 +25,7 @@ function StatusBadge({ status }) {
   return <span className={`badge ${cls}`}>{label}</span>;
 }
 
-export default function Dashboard({ driver, onLogout, onDriverUpdate }) {
+export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }) {
   const [rides, setRides]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
@@ -34,6 +34,7 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate }) {
   const [driverStatus, setDriverStatus] = useState(driver?.status || "available");
   const [savingStatus, setSavingStatus] = useState(false);
   const isOnline = driverStatus !== "offline";
+  const notify = (toast) => onNotify?.(toast);
 
   const fetchRides = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -43,7 +44,10 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate }) {
       setRides(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       if (err.response?.status === 401) onLogout();
-      else setError("Could not load rides.");
+      else {
+        setError("Could not load rides.");
+        if (!silent) notify({ type: "error", text: "Could not load rides." });
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -68,9 +72,16 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate }) {
       const res = await axios.patch(`${API}/driver/status`, { status: nextStatus }, getAuth());
       setDriverStatus(res.data.status);
       onDriverUpdate?.({ status: res.data.status });
+      notify({
+        type: "success",
+        text: res.data.status === "available" ? "Driver Mode is online." : "Driver Mode is offline.",
+      });
     } catch (err) {
       if (err.response?.status === 401) onLogout();
-      else setError("Failed to update driver mode.");
+      else {
+        setError("Failed to update driver mode.");
+        notify({ type: "error", text: "Failed to update driver mode." });
+      }
     } finally {
       setSavingStatus(false);
     }
@@ -81,7 +92,11 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate }) {
     try {
       await axios.patch(`${API}/rides/${ride.id}/status`, { status: "active" }, getAuth());
       setRides(prev => prev.map(r => r.id === ride.id ? { ...r, status: "active" } : r));
-    } catch { setError("Failed to accept ride."); }
+      notify({ type: "success", text: `Ride #${ride.id} accepted.` });
+    } catch {
+      setError("Failed to accept ride.");
+      notify({ type: "error", text: "Failed to accept ride." });
+    }
     finally { setAccepting(null); }
   };
 
@@ -90,7 +105,11 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate }) {
     try {
       await axios.patch(`${API}/rides/${ride.id}/status`, { status: "completed" }, getAuth());
       setRides(prev => prev.map(r => r.id === ride.id ? { ...r, status: "completed" } : r));
-    } catch { setError("Failed to complete ride."); }
+      notify({ type: "success", text: `Ride #${ride.id} completed.` });
+    } catch {
+      setError("Failed to complete ride.");
+      notify({ type: "error", text: "Failed to complete ride." });
+    }
     finally { setAccepting(null); }
   };
 
