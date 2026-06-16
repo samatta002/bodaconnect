@@ -9,6 +9,8 @@ import Register from "./pages/Register";
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
+  const [theme, setTheme] = useState(() => localStorage.getItem("bc_theme") || "dark");
+  const [lang, setLang] = useState(() => localStorage.getItem("bc_lang") || "en");
   const [driver, setDriver] = useState(() => {
     try { return JSON.parse(localStorage.getItem("bc_driver")); }
     catch { return null; }
@@ -35,6 +37,15 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("bc_theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem("bc_lang", lang);
+  }, [lang]);
+
   return (
     <BrowserRouter>
       {showSplash && (
@@ -47,9 +58,16 @@ export default function App() {
           <div className="splash-loader"><span /></div>
         </div>
       )}
-      <Layout driver={hasDriverSession ? driver : null} onLogout={handleLogout}>
+      <Layout
+        driver={hasDriverSession ? driver : null}
+        onLogout={handleLogout}
+        lang={lang}
+        setLang={setLang}
+        theme={theme}
+        setTheme={setTheme}
+      >
         <Routes>
-          <Route path="/"     element={<Home />} />
+          <Route path="/"     element={<Home lang={lang} />} />
           <Route path="/ride" element={hasDriverSession ? <Navigate to="/dashboard" replace /> : <Ride />} />
           <Route path="/login"
             element={hasDriverSession ? <Navigate to="/dashboard" replace /> : <Login onLogin={handleLogin} />}

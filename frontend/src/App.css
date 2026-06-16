@@ -553,6 +553,43 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   font-weight: 700;
 }
 
+.app-floating-controls {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 500;
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: var(--radius-full);
+  background: rgba(15,22,30,0.82);
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.32);
+  backdrop-filter: blur(16px);
+}
+
+:root[data-theme="light"] .app-floating-controls {
+  background: rgba(255,255,255,0.86);
+}
+
+.app-floating-controls button {
+  border: 0;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.app-floating-controls button:hover {
+  color: var(--green);
+  background: var(--green-dim);
+}
+
 /* Home page */
 .home-page {
   flex: 1;
@@ -704,6 +741,7 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   width: min(1120px, calc(100% - 3rem));
   margin: 0 auto;
   padding: 6rem 0 0;
+  scroll-margin-top: 88px;
 }
 
 .home-section-heading {
@@ -849,6 +887,159 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   color: var(--text2);
   font-size: 0.86rem;
   line-height: 1.65;
+}
+
+.home-ride-showcase {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 1.4rem;
+  align-items: center;
+  padding-top: 7rem;
+}
+
+.phone-demo {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.2rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.phone-shell {
+  width: min(300px, 78vw);
+  aspect-ratio: 9 / 16;
+  border-radius: 34px;
+  padding: 12px;
+  background: linear-gradient(145deg, #111827, #020617);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 26px 80px rgba(0,0,0,0.42), 0 0 0 8px rgba(255,255,255,0.03);
+  position: relative;
+}
+
+.phone-top {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 82px;
+  height: 18px;
+  border-radius: 999px;
+  background: #020617;
+  z-index: 3;
+}
+
+.phone-map {
+  height: 100%;
+  border-radius: 26px;
+  overflow: hidden;
+  position: relative;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(34,197,94,0.24), transparent 18%),
+    radial-gradient(circle at 76% 68%, rgba(59,130,246,0.22), transparent 18%),
+    #0d1117;
+}
+
+.map-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 38px 38px;
+  transform: rotate(-8deg) scale(1.2);
+}
+
+.route-line {
+  position: absolute;
+  left: 26%;
+  top: 22%;
+  width: 52%;
+  height: 56%;
+  border: 3px dashed rgba(34,197,94,0.8);
+  border-left: 0;
+  border-bottom: 0;
+  border-radius: 0 90px 0 0;
+}
+
+.route-bike {
+  position: absolute;
+  left: 22%;
+  top: 70%;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--green);
+  color: #000;
+  box-shadow: 0 0 28px rgba(34,197,94,0.45);
+  animation: ride-phone-route 5.6s ease-in-out infinite;
+}
+
+@keyframes ride-phone-route {
+  0%, 100% { transform: translate(0, 0) rotate(-20deg); }
+  35% { transform: translate(72px, -90px) rotate(15deg); }
+  70% { transform: translate(118px, -170px) rotate(35deg); }
+}
+
+.pin {
+  position: absolute;
+  color: var(--green);
+  font-size: 1.5rem;
+}
+
+.pin.pickup { left: 18%; bottom: 19%; }
+.pin.destination { right: 18%; top: 18%; color: var(--blue); }
+
+.phone-card {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(15,22,30,0.88);
+  border: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: blur(14px);
+}
+
+.phone-card strong,
+.phone-card span {
+  display: block;
+}
+
+.phone-card span {
+  color: var(--green);
+  margin-top: 4px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.phone-status-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.phone-status-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--text2);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 0.85rem 1rem;
+  animation: status-pulse 2.4s ease-in-out infinite;
+}
+
+.phone-status-list svg {
+  color: var(--green);
+}
+
+@keyframes status-pulse {
+  0%, 100% { transform: translateX(0); border-color: var(--border); }
+  50% { transform: translateX(8px); border-color: rgba(34,197,94,0.28); }
 }
 
 .home-faq-contact {
@@ -1173,13 +1364,15 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   .home-stat:nth-child(2) { border-right: 0; }
   .home-stat:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
   .home-about-grid,
-  .home-faq-contact {
+  .home-faq-contact,
+  .home-ride-showcase {
     grid-template-columns: 1fr;
   }
   .home-feature-grid {
     grid-template-columns: repeat(2, 1fr);
   }
   .home-float-icon { display: none; }
+  .phone-demo { grid-template-columns: 1fr; justify-items: center; }
   .register-grid { grid-template-columns: 1fr; }
   .register-visual { min-height: auto; }
 }
@@ -1217,4 +1410,11 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   .register-visual { padding: 1.25rem; }
   .register-form-grid { grid-template-columns: 1fr; }
   .register-card-header { align-items: flex-start; }
+  .app-floating-controls {
+    left: 10px;
+    bottom: 10px;
+  }
+  .app-floating-controls button span {
+    display: none;
+  }
 }

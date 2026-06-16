@@ -48,12 +48,38 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root[data-theme="light"] {
+  --bg:    #f7faf8;
+  --bg2:   #ffffff;
+  --bg3:   #eef4f0;
+  --bg4:   #dfe9e3;
+  --card:  #ffffff;
+  --card2: #f3f8f5;
+
+  --border:  rgba(13,17,23,0.08);
+  --border2: rgba(13,17,23,0.16);
+
+  --green-dim:  rgba(22,163,74,0.12);
+  --green-glow: rgba(22,163,74,0.20);
+
+  --white-dim:  rgba(13,17,23,0.05);
+  --white-dim2: rgba(13,17,23,0.10);
+
+  --blue-dim: rgba(59,130,246,0.12);
+  --red-dim:  rgba(239,68,68,0.12);
+
+  --text:  #0d1117;
+  --text2: #4b5563;
+  --text3: #758194;
+}
+
 body {
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 #root {

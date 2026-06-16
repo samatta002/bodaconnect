@@ -1,17 +1,23 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FiHome, FiNavigation, FiGrid, FiLogOut, FiUser } from "react-icons/fi";
+import { FiGlobe, FiGrid, FiHome, FiLogOut, FiMoon, FiNavigation, FiSun, FiUser } from "react-icons/fi";
 
-export default function Layout({ children, driver, onLogout }) {
+export default function Layout({ children, driver, onLogout, lang = "en", setLang, theme = "dark", setTheme }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const text = {
+    en: { home: "Home", ride: "Book Ride", dashboard: "Dashboard", live: "LIVE", login: "Driver Login", rights: "All rights reserved.", dev: "Developed by" },
+    sw: { home: "Nyumbani", ride: "Agiza Safari", dashboard: "Dashibodi", live: "LIVE", login: "Dereva Ingia", rights: "Haki zote zimehifadhiwa.", dev: "Imetengenezwa na" },
+  }[lang] || {};
 
   const links = [
-    { to: "/",     label: "Home",      Icon: FiHome      },
-    ...(!driver ? [{ to: "/ride", label: "Book Ride", Icon: FiNavigation }] : []),
-    ...(driver ? [{ to: "/dashboard", label: "Dashboard", Icon: FiGrid }] : []),
+    { to: "/",     label: text.home,      Icon: FiHome      },
+    ...(!driver ? [{ to: "/ride", label: text.ride, Icon: FiNavigation }] : []),
+    ...(driver ? [{ to: "/dashboard", label: text.dashboard, Icon: FiGrid }] : []),
   ];
 
   const logout = () => { onLogout(); navigate("/login"); };
+  const toggleLang = () => setLang?.(lang === "en" ? "sw" : "en");
+  const toggleTheme = () => setTheme?.(theme === "dark" ? "light" : "dark");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
@@ -84,7 +90,7 @@ export default function Layout({ children, driver, onLogout }) {
               background: "#22c55e", boxShadow: "0 0 6px #22c55e",
             }} />
             <span style={{ fontSize: "0.72rem", color: "#22c55e", fontWeight: 600, letterSpacing: "0.04em" }}>
-              LIVE
+              {text.live}
             </span>
           </div>
 
@@ -121,7 +127,7 @@ export default function Layout({ children, driver, onLogout }) {
                 cursor: "pointer", fontFamily: "inherit",
                 boxShadow: "0 0 16px rgba(34,197,94,0.25)",
               }}>
-                Driver Login
+                {text.login}
               </button>
             </Link>
           )}
@@ -144,11 +150,22 @@ export default function Layout({ children, driver, onLogout }) {
         color: "#484f58",
         fontSize: "0.78rem",
       }}>
-        <span>&copy; {new Date().getFullYear()} BodaConnect. All rights reserved.</span>
+        <span>&copy; {new Date().getFullYear()} BodaConnect. {text.rights}</span>
         <span>
-          Developed by <strong style={{ color: "#22c55e", fontWeight: 600 }}>Mbwana Ally</strong>
+          {text.dev} <strong style={{ color: "#22c55e", fontWeight: 600 }}>Mbwana Ally</strong>
         </span>
       </footer>
+
+      <div className="app-floating-controls" aria-label="Display controls">
+        <button type="button" onClick={toggleLang} title="Switch language">
+          <FiGlobe />
+          <span>{lang === "en" ? "SW" : "EN"}</span>
+        </button>
+        <button type="button" onClick={toggleTheme} title="Switch theme">
+          {theme === "dark" ? <FiSun /> : <FiMoon />}
+          <span>{theme === "dark" ? "Light" : "Dark"}</span>
+        </button>
+      </div>
     </div>
   );
 }
