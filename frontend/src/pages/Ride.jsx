@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
@@ -183,6 +183,7 @@ export default function Ride() {
   const [destination, setDestination] = useState(null);
   const [status, setStatus]           = useState("idle");
   const [rideId, setRideId]           = useState(null);
+  const [rideStatus, setRideStatus]   = useState(null);
 
   const dist = calcDist(pickup, destination);
   const fare = dist ? Math.round(dist * FARE_PER_KM) : null;
@@ -196,6 +197,7 @@ export default function Ride() {
         destination: destination?.name || "Not specified",
       });
       setRideId(res.data?.id || "—");
+      setRideStatus(res.data?.status || "pending");
       setStatus("success");
     } catch (err) {
       console.error(err);
@@ -205,12 +207,36 @@ export default function Ride() {
 
   const reset = () => {
     setPickup(null); setDestination(null);
-    setStatus("idle"); setRideId(null);
+    setStatus("idle"); setRideId(null); setRideStatus(null);
   };
+
+  useEffect(() => {
+    if (status !== "success" || !rideId) return;
+
+    const fetchRideStatus = async () => {
+      try {
+        const res = await axios.get(`/api/rides/${rideId}`);
+        setRideStatus(res.data?.status || "pending");
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchRideStatus();
+    const timer = setInterval(fetchRideStatus, 3000);
+    return () => clearInterval(timer);
+  }, [status, rideId]);
 
   const mapCenter = pickup
     ? [pickup.lat, pickup.lng]
     : [-6.8160, 39.2738];
+
+  const rideStatusText = {
+    pending: "Waiting for a driver to accept.",
+    active: "Driver accepted and is on the way.",
+    completed: "Ride completed successfully.",
+    cancelled: "Ride was cancelled.",
+  }[rideStatus] || "Waiting for ride updates.";
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden" }}>
@@ -241,12 +267,12 @@ export default function Ride() {
               style={{ margin: "1rem 1.25rem", padding: "1rem 1.25rem", borderRadius: 12,
                 background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#22c55e", fontWeight: 700, marginBottom: 6, fontSize: "0.92rem" }}>
-                <FiCheck size={15} /> Ride Confirmed!
+                <FiCheck size={15} /> Ride {rideStatus || "pending"}
               </div>
               <p style={{ fontSize: "0.82rem", color: "#8b949e", lineHeight: 1.6 }}>
                 Ride #{rideId} booked from <strong style={{ color: "#f0f6fc" }}>{pickup?.name}</strong> to{" "}
                 <strong style={{ color: "#f0f6fc" }}>{destination?.name || "destination"}</strong>.
-                A driver is on the way.
+                {rideStatusText}
               </p>
               <button onClick={reset}
                 style={{ marginTop: 12, width: "100%", padding: "8px", background: "rgba(255,255,255,0.05)",

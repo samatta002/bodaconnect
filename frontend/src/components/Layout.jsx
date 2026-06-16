@@ -7,7 +7,7 @@ export default function Layout({ children, driver, onLogout }) {
 
   const links = [
     { to: "/",     label: "Home",      Icon: FiHome      },
-    { to: "/ride", label: "Book Ride", Icon: FiNavigation },
+    ...(!driver ? [{ to: "/ride", label: "Book Ride", Icon: FiNavigation }] : []),
     ...(driver ? [{ to: "/dashboard", label: "Dashboard", Icon: FiGrid }] : []),
   ];
 

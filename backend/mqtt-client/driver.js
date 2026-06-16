@@ -8,26 +8,12 @@ const MQTT_PORT = process.env.MQTT_PORT || "1883";
 const MQTT_USE_TLS = process.env.MQTT_USE_TLS === "true";
 const MQTT_USERNAME = process.env.MQTT_USERNAME;
 const MQTT_PASSWORD = process.env.MQTT_PASSWORD;
+const API_URL = (process.env.BODACONNECT_API_URL || "http://localhost:5000").replace(/\/$/, "");
 const protocol = MQTT_USE_TLS ? "mqtts" : "mqtt";
 const brokerUrl = `${protocol}://${MQTT_HOST}:${MQTT_PORT}`;
 
-const DRIVER = {
-  id: Number(process.env.DRIVER_ID || 1),
-  name: process.env.DRIVER_NAME || "Mbwana Tupa",
-  plate: process.env.DRIVER_PLATE || "T 234 ABC",
-};
-
-const clientOptions = {
-  clientId: `driver-simulator-${DRIVER.id}-${Date.now()}`,
-  clean: true,
-  connectTimeout: 10000,
-  reconnectPeriod: 3000,
-};
-
-if (MQTT_USERNAME) {
-  clientOptions.username = MQTT_USERNAME;
-  clientOptions.password = MQTT_PASSWORD || "";
-}
+let DRIVER = null;
+let client = null;
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -40,7 +26,53 @@ function ask(question) {
   });
 }
 
+async function fetchJson(url, options = {}) {
+  const res = await fetch(url, options);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || `Request failed with status ${res.status}`);
+  }
+  return body;
+}
+
+async function getAuthToken() {
+  if (process.env.BODACONNECT_TOKEN) return process.env.BODACONNECT_TOKEN;
+
+  let email = process.env.DRIVER_EMAIL;
+  let password = process.env.DRIVER_PASSWORD;
+
+  if (!email) email = await ask("Driver email: ");
+  if (!password) password = await ask("Driver password: ");
+
+  const login = await fetchJson(`${API_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+
+  return login.token;
+}
+
+async function loadDriverProfile() {
+  const token = await getAuthToken();
+  const driver = await fetchJson(`${API_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  return {
+    id: driver.id,
+    name: driver.name,
+    email: driver.email,
+    plate: driver.plate || "No plate",
+  };
+}
+
 function publish(topic, payload) {
+  if (!client?.connected) {
+    console.error(`Cannot publish ${topic}; MQTT client is not connected.`);
+    return;
+  }
+
   client.publish(
     topic,
     JSON.stringify({ ...payload, timestamp: new Date().toISOString() }),
@@ -133,49 +165,80 @@ async function handleRideRequest(ride) {
   startTripSimulation(ride);
 }
 
-const client = mqtt.connect(brokerUrl, clientOptions);
+function connectMQTT() {
+  const clientOptions = {
+    clientId: `driver-simulator-${DRIVER.id}-${Date.now()}`,
+    clean: true,
+    connectTimeout: 10000,
+    reconnectPeriod: 3000,
+  };
 
-console.log("\nBodaConnect Driver Simulator");
-console.log("============================");
-console.log(`Broker: ${brokerUrl}`);
-console.log(`Driver: ${DRIVER.name}`);
-console.log(`Plate : ${DRIVER.plate}\n`);
-
-client.on("connect", () => {
-  console.log("Driver connected to MQTT broker\n");
-
-  client.subscribe("ride/request", (err) => {
-    if (err) console.error("Failed to subscribe to ride/request:", err.message);
-    else console.log("Waiting for ride requests on: ride/request\n");
-  });
-});
-
-client.on("message", (topic, message) => {
-  if (topic !== "ride/request") return;
-
-  let ride;
-  try {
-    ride = JSON.parse(message.toString());
-  } catch {
-    console.log(`Received non-JSON ride request: ${message.toString()}`);
-    return;
+  if (MQTT_USERNAME) {
+    clientOptions.username = MQTT_USERNAME;
+    clientOptions.password = MQTT_PASSWORD || "";
   }
 
-  handleRideRequest(ride).catch((err) => {
-    console.error("Failed to handle ride request:", err.message || err);
+  client = mqtt.connect(brokerUrl, clientOptions);
+
+  client.on("connect", () => {
+    console.log("Driver connected to MQTT broker\n");
+
+    client.subscribe("ride/request", (err) => {
+      if (err) console.error("Failed to subscribe to ride/request:", err.message);
+      else console.log("Waiting for ride requests on: ride/request\n");
+    });
   });
-});
 
-client.on("error", (err) => {
-  console.error("Connection error:", err.message || err);
-});
+  client.on("message", (topic, message) => {
+    if (topic !== "ride/request") return;
 
-client.on("offline", () => {
-  console.error("MQTT client is offline. Check the broker host, port, and AWS security group.");
-});
+    let ride;
+    try {
+      ride = JSON.parse(message.toString());
+    } catch {
+      console.log(`Received non-JSON ride request: ${message.toString()}`);
+      return;
+    }
+
+    handleRideRequest(ride).catch((err) => {
+      console.error("Failed to handle ride request:", err.message || err);
+    });
+  });
+
+  client.on("error", (err) => {
+    console.error("Connection error:", err.message || err);
+  });
+
+  client.on("offline", () => {
+    console.error("MQTT client is offline. Check the broker host, port, and AWS security group.");
+  });
+}
+
+async function start() {
+  console.log("\nBodaConnect Driver Simulator");
+  console.log("============================");
+  console.log(`API   : ${API_URL}`);
+  console.log(`Broker: ${brokerUrl}\n`);
+
+  try {
+    DRIVER = await loadDriverProfile();
+  } catch (err) {
+    console.error(`Could not load driver profile: ${err.message}`);
+    console.error("Set BODACONNECT_API_URL and valid DRIVER_EMAIL/DRIVER_PASSWORD, then try again.");
+    process.exit(1);
+  }
+
+  console.log(`Driver: ${DRIVER.name}`);
+  console.log(`Email : ${DRIVER.email}`);
+  console.log(`Plate : ${DRIVER.plate}\n`);
+
+  connectMQTT();
+}
 
 process.on("SIGINT", () => {
   rl.close();
-  client.end(true);
+  if (client) client.end(true);
   process.exit(0);
 });
+
+start();

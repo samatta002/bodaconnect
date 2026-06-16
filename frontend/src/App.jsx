@@ -26,7 +26,7 @@ export default function App() {
       <Layout driver={driver} onLogout={handleLogout}>
         <Routes>
           <Route path="/"     element={<Home />} />
-          <Route path="/ride" element={<Ride />} />
+          <Route path="/ride" element={driver ? <Navigate to="/dashboard" /> : <Ride />} />
           <Route path="/login"
             element={driver ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />}
           />

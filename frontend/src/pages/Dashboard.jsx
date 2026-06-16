@@ -15,7 +15,7 @@ const getAuth = () => ({
 
 const STATUS_MAP = {
   pending:   { cls: "badge-orange", label: "Pending"   },
-  active:    { cls: "badge-green",  label: "Active"    },
+  active:    { cls: "badge-green",  label: "Accepted"  },
   completed: { cls: "badge-muted",  label: "Completed" },
   cancelled: { cls: "badge-red",    label: "Cancelled" },
 };
@@ -32,8 +32,9 @@ export default function Dashboard({ driver, onLogout }) {
   const [accepting, setAccepting] = useState(null);
   const [hovered, setHovered]     = useState(null);
 
-  const fetchRides = async () => {
-    setLoading(true); setError(null);
+  const fetchRides = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    setError(null);
     try {
       const res = await axios.get(`${API}/rides`, getAuth());
       setRides(Array.isArray(res.data) ? res.data : []);
@@ -41,11 +42,15 @@ export default function Dashboard({ driver, onLogout }) {
       if (err.response?.status === 401) onLogout();
       else setError("Could not load rides.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  useEffect(() => { fetchRides(); }, []);
+  useEffect(() => {
+    fetchRides();
+    const timer = setInterval(() => fetchRides({ silent: true }), 3000);
+    return () => clearInterval(timer);
+  }, []);
 
   const acceptRide = async (ride) => {
     setAccepting(ride.id);
@@ -179,11 +184,11 @@ export default function Dashboard({ driver, onLogout }) {
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <h3 style={{ fontSize: "0.95rem", fontWeight: 600, marginBottom: 2 }}>All Rides</h3>
-              <p style={{ fontSize: "0.75rem", color: "var(--text3)" }}>Accept pending rides or mark active ones complete</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--text3)" }}>Accept pending rides and complete accepted rides</p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="badge badge-muted">{rides.length} total</span>
-              {active  > 0 && <span className="badge badge-green">{active} live</span>}
+              {active  > 0 && <span className="badge badge-green">{active} accepted</span>}
               {pending > 0 && <span className="badge badge-orange">{pending} pending</span>}
             </div>
           </div>
