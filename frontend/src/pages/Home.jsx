@@ -1,316 +1,295 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { FiArrowRight, FiZap, FiShield, FiClock, FiStar, FiMapPin, FiUsers, FiTrendingUp } from "react-icons/fi";
-
-const features = [
-  { icon: <FiZap size={22} />,    title: "Instant Matching",  desc: "Matched to a nearby driver in under 2 minutes, guaranteed.", color: "var(--green)", dim: "var(--green-dim)"  },
-  { icon: <FiShield size={22} />, title: "Safe & Verified",   desc: "Every driver is vetted, rated, and GPS-tracked in real time.", color: "var(--text)",  dim: "var(--white-dim2)" },
-  { icon: <FiClock size={22} />,  title: "24 / 7 Service",    desc: "Available day and night across 50+ zones in the city.",        color: "var(--green)", dim: "var(--green-dim)"  },
-  { icon: <FiStar size={22} />,   title: "Top-Rated Drivers", desc: "Community ratings keep quality consistent every single ride.", color: "var(--text)",  dim: "var(--white-dim2)" },
-];
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  FiArrowRight,
+  FiCheckCircle,
+  FiChevronDown,
+  FiClock,
+  FiHeadphones,
+  FiMail,
+  FiMapPin,
+  FiMessageCircle,
+  FiNavigation,
+  FiPhone,
+  FiShield,
+  FiSmartphone,
+  FiStar,
+  FiTrendingUp,
+  FiUsers,
+  FiZap,
+} from "react-icons/fi";
 
 const stats = [
-  { value: "2,400+", label: "Active Riders",  icon: <FiUsers size={16} />       },
-  { value: "98%",    label: "On-Time Rate",   icon: <FiTrendingUp size={16} />  },
-  { value: "4.9 ★",  label: "Average Rating", icon: <FiStar size={16} />        },
-  { value: "50+",    label: "City Zones",     icon: <FiMapPin size={16} />      },
+  { value: "2,400+", label: "Rides matched", icon: <FiNavigation /> },
+  { value: "98%", label: "On-time pickup", icon: <FiTrendingUp /> },
+  { value: "4.9", label: "Driver rating", icon: <FiStar /> },
+  { value: "24/7", label: "Support", icon: <FiHeadphones /> },
 ];
 
-const steps = [
-  { num: "01", title: "Set your pickup",    desc: "Drop a pin anywhere on the map." },
-  { num: "02", title: "Choose destination", desc: "See the fare estimate instantly."  },
-  { num: "03", title: "Get matched",        desc: "A nearby driver arrives in minutes." },
+const features = [
+  {
+    icon: <FiZap />,
+    title: "Fast ride matching",
+    desc: "New requests reach nearby drivers instantly through live MQTT events.",
+    tone: "green",
+  },
+  {
+    icon: <FiShield />,
+    title: "Driver-first safety",
+    desc: "Driver profiles, plates, ride states, and trip progress stay visible.",
+    tone: "blue",
+  },
+  {
+    icon: <FiSmartphone />,
+    title: "Live trip updates",
+    desc: "Passengers and drivers see the ride move from pending to accepted to completed.",
+    tone: "amber",
+  },
+  {
+    icon: <FiClock />,
+    title: "Always available",
+    desc: "Built for quick city movement, busy streets, and repeat daily use.",
+    tone: "white",
+  },
+];
+
+const howItWorks = [
+  { step: "01", title: "Passenger books", desc: "Pickup and destination are selected from the map or list." },
+  { step: "02", title: "Driver accepts", desc: "The driver dashboard receives the request and confirms the ride." },
+  { step: "03", title: "Trip updates", desc: "Status and location updates keep both sides in sync." },
+];
+
+const faqs = [
+  {
+    q: "How does BodaConnect match rides?",
+    a: "A passenger request is saved by the backend and published as an MQTT event. Connected drivers receive it immediately.",
+  },
+  {
+    q: "Can a driver see passenger requests in real time?",
+    a: "Yes. The dashboard refreshes automatically, and the driver simulator listens to the same live ride/request topic.",
+  },
+  {
+    q: "What happens after a driver accepts?",
+    a: "The ride changes from pending to accepted, then the backend syncs completion events back into MySQL for the frontend.",
+  },
+  {
+    q: "Is BodaConnect only for Dar es Salaam?",
+    a: "The current demo is tuned for Dar es Salaam locations, but the same flow can support more cities.",
+  },
 ];
 
 export default function Home() {
+  const [openFaq, setOpenFaq] = useState(0);
+
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: "var(--bg)" }}>
+    <div className="home-page">
+      <section className="home-hero" aria-label="BodaConnect homepage">
+        <img className="home-hero-image" src="/home-hero.png" alt="BodaConnect boda boda driver ready for a ride" />
+        <div className="home-hero-shade" />
 
-      {/* ══════════════ HERO ══════════════ */}
-      <section style={{
-        minHeight: "calc(100vh - 64px)",
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        textAlign: "center", padding: "5rem 2rem 4rem",
-        position: "relative", overflow: "hidden",
-      }}>
-        {/* Grid lines background */}
-        <div style={{
-          position: "absolute", inset: 0, pointerEvents: "none",
-          backgroundImage: "linear-gradient(rgba(34,197,94,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.04) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-          maskImage: "radial-gradient(ellipse 80% 60% at 50% 50%, black 40%, transparent 100%)",
-        }} />
+        <div className="home-hero-content">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="home-chip"
+          >
+            <span className="pulse-dot" />
+            Live boda boda ride matching
+          </motion.div>
 
-        {/* Green core glow */}
-        <div style={{
-          position: "absolute", top: "42%", left: "50%",
-          transform: "translate(-50%,-50%)",
-          width: 900, height: 600,
-          background: "radial-gradient(ellipse, rgba(34,197,94,0.09) 0%, transparent 65%)",
-          pointerEvents: "none",
-        }} />
+          <motion.h1
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+          >
+            BodaConnect
+          </motion.h1>
 
-        {/* Live chip */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 8,
-            background: "rgba(34,197,94,0.08)",
-            border: "1px solid rgba(34,197,94,0.22)",
-            borderRadius: "var(--radius-full)",
-            padding: "7px 18px", fontSize: "0.78rem", fontWeight: 600,
-            color: "var(--green)", marginBottom: "2rem", letterSpacing: "0.02em",
-          }}
-        >
-          <div className="pulse-dot" style={{ width: 6, height: 6 }} />
-          Now live across Dar es Salaam
-        </motion.div>
+          <motion.p
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.16 }}
+            className="home-hero-copy"
+          >
+            A modern ride platform connecting passengers and trusted boda boda drivers across the city with live booking, status, and location updates.
+          </motion.p>
 
-        {/* Headline */}
-        <motion.h1
-          initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.6, ease: [0.16,1,0.3,1] }}
-          style={{
-            fontSize: "clamp(3rem, 6.5vw, 5.5rem)",
-            fontWeight: 700, letterSpacing: "-0.045em",
-            lineHeight: 1.02, marginBottom: "1.5rem", maxWidth: 780,
-            color: "var(--text)",
-          }}
-        >
-          The fastest way to{" "}
-          <span style={{
-            background: "linear-gradient(135deg, var(--green) 0%, var(--green3) 100%)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-          }}>
-            move
-          </span>
-          <br />across the city
-        </motion.h1>
-
-        {/* Subtitle */}
-        <motion.p
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          style={{
-            fontSize: "1.15rem", color: "var(--text2)", lineHeight: 1.7,
-            maxWidth: 480, marginBottom: "2.5rem",
-          }}
-        >
-          Reliable boda boda rides at your fingertips.
-          Book in seconds, ride in minutes — any time, any zone.
-        </motion.p>
-
-        {/* CTA buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.28 }}
-          style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center" }}
-        >
-          <Link to="/ride" style={{ textDecoration: "none" }}>
-            <button className="btn btn-primary btn-xl" style={{
-              boxShadow: "0 0 40px rgba(34,197,94,0.28), 0 4px 16px rgba(0,0,0,0.4)",
-              fontSize: "1rem", padding: "16px 44px",
-            }}>
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.24 }}
+            className="home-actions"
+          >
+            <Link to="/ride" className="btn btn-primary btn-xl">
               Book a Ride <FiArrowRight size={18} />
-            </button>
-          </Link>
-          <Link to="/dashboard" style={{ textDecoration: "none" }}>
-            <button className="btn btn-outline btn-xl" style={{
-              fontSize: "1rem", padding: "16px 36px",
-            }}>
-              View Dashboard
-            </button>
-          </Link>
-        </motion.div>
-
-        {/* Stats bar */}
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          transition={{ delay: 0.55 }}
-          style={{
-            display: "flex", marginTop: "5rem",
-            flexWrap: "wrap", justifyContent: "center",
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-xl)",
-            overflow: "hidden",
-          }}
-        >
-          {stats.map((s, i) => (
-            <div key={i} style={{
-              textAlign: "center", padding: "1.25rem 2.5rem",
-              borderRight: i < stats.length - 1 ? "1px solid var(--border)" : "none",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: "var(--green)", marginBottom: 6 }}>
-                {s.icon}
-              </div>
-              <div style={{ fontSize: "1.6rem", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text)" }}>
-                {s.value}
-              </div>
-              <div style={{ fontSize: "0.72rem", color: "var(--text3)", marginTop: 3, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </motion.div>
-      </section>
-
-      {/* ══════════════ HOW IT WORKS ══════════════ */}
-      <section style={{ padding: "5rem 2rem", maxWidth: 900, margin: "0 auto" }}>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          style={{ textAlign: "center", marginBottom: "3.5rem" }}
-        >
-          <span className="badge badge-green" style={{ marginBottom: "1rem" }}>How it works</span>
-          <h2 style={{ fontSize: "2.2rem", fontWeight: 700, letterSpacing: "-0.035em", marginTop: 10 }}>
-            Three steps, that's it
-          </h2>
-        </motion.div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
-          {steps.map((s, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-              style={{
-                background: "var(--card)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                padding: "2rem 1.5rem",
-                position: "relative", overflow: "hidden",
-              }}
-            >
-              {/* Big watermark number */}
-              <div style={{
-                position: "absolute", top: -10, right: 16,
-                fontSize: "5rem", fontWeight: 800,
-                color: "rgba(34,197,94,0.05)",
-                letterSpacing: "-0.04em", lineHeight: 1,
-                userSelect: "none",
-              }}>
-                {s.num}
-              </div>
-
-              <div style={{
-                width: 36, height: 36, borderRadius: 8,
-                background: "var(--green-dim)",
-                border: "1px solid rgba(34,197,94,0.2)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "var(--green)", fontWeight: 700, fontSize: "0.85rem",
-                marginBottom: "1.25rem",
-              }}>
-                {s.num}
-              </div>
-              <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>{s.title}</h3>
-              <p style={{ fontSize: "0.875rem", color: "var(--text2)", lineHeight: 1.6 }}>{s.desc}</p>
-            </motion.div>
-          ))}
+            </Link>
+            <a href="#about" className="btn btn-outline btn-xl">
+              Explore BodaConnect
+            </a>
+          </motion.div>
         </div>
       </section>
 
-      {/* ══════════════ FEATURES ══════════════ */}
-      <section style={{ padding: "2rem 2rem 5rem", maxWidth: 1060, margin: "0 auto" }}>
+      <section className="home-stats" aria-label="BodaConnect highlights">
+        {stats.map((item) => (
+          <div className="home-stat" key={item.label}>
+            <div className="home-stat-icon">{item.icon}</div>
+            <strong>{item.value}</strong>
+            <span>{item.label}</span>
+          </div>
+        ))}
+      </section>
+
+      <section id="about" className="home-section home-about">
         <motion.div
-          initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          style={{ textAlign: "center", marginBottom: "3rem" }}
+          className="home-section-heading"
         >
-          <span className="badge badge-green" style={{ marginBottom: "1rem" }}>Why BodaConnect</span>
-          <h2 style={{ fontSize: "2.2rem", fontWeight: 700, letterSpacing: "-0.035em", marginTop: 10 }}>
-            Built for Dar es Salaam
-          </h2>
-          <p style={{ color: "var(--text2)", marginTop: 12, fontSize: "1rem", maxWidth: 420, margin: "12px auto 0" }}>
-            Every feature designed around the city's real needs
+          <span className="badge badge-green">About us</span>
+          <h2>Built for faster, safer city movement.</h2>
+          <p>
+            BodaConnect brings the familiar boda boda experience into a clear digital workflow for passengers, drivers, and operators.
           </p>
         </motion.div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1rem" }}>
-          {features.map((f, i) => (
+        <div className="home-about-grid">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="home-about-copy"
+          >
+            <h3>Real ride events, not static screens.</h3>
+            <p>
+              Every booking follows a practical flow: a passenger requests a ride, a driver accepts, the trip becomes active, and completion updates return to the dashboard.
+            </p>
+            <div className="home-check-list">
+              <span><FiCheckCircle /> MQTT-powered ride requests</span>
+              <span><FiCheckCircle /> Driver dashboard status syncing</span>
+              <span><FiCheckCircle /> Backend, MySQL, Prometheus, and Grafana stack</span>
+            </div>
+          </motion.div>
+
+          <div className="home-process">
+            {howItWorks.map((step, index) => (
+              <motion.div
+                key={step.step}
+                initial={{ opacity: 0, x: 18 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.08 }}
+                className="home-process-item"
+              >
+                <strong>{step.step}</strong>
+                <div>
+                  <h4>{step.title}</h4>
+                  <p>{step.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="home-section">
+        <div className="home-section-heading">
+          <span className="badge badge-blue">Features</span>
+          <h2>Everything feels connected.</h2>
+          <p>Designed to make the app feel active, useful, and dependable from the first click.</p>
+        </div>
+
+        <div className="home-feature-grid">
+          {features.map((feature, index) => (
             <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }} transition={{ delay: i * 0.08 }}
-              whileHover={{ y: -3, borderColor: "rgba(34,197,94,0.25)" }}
-              style={{
-                background: "var(--card)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                padding: "1.75rem",
-                display: "flex", gap: 18, alignItems: "flex-start",
-                transition: "border-color 0.2s",
-                cursor: "default",
-              }}
+              key={feature.title}
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.07 }}
+              className={`home-feature-card tone-${feature.tone}`}
             >
-              <div style={{
-                width: 48, height: 48, borderRadius: 12, flexShrink: 0,
-                background: f.dim,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: f.color, border: "1px solid rgba(255,255,255,0.05)",
-              }}>
-                {f.icon}
-              </div>
-              <div>
-                <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8, color: "var(--text)" }}>
-                  {f.title}
-                </h3>
-                <p style={{ fontSize: "0.875rem", color: "var(--text2)", lineHeight: 1.65 }}>
-                  {f.desc}
-                </p>
-              </div>
+              <div className="home-feature-icon">{feature.icon}</div>
+              <h3>{feature.title}</h3>
+              <p>{feature.desc}</p>
             </motion.div>
           ))}
         </div>
       </section>
 
-      {/* ══════════════ CTA BAND ══════════════ */}
-      <section style={{ maxWidth: 820, margin: "0 auto 6rem", padding: "0 2rem" }}>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          style={{
-            position: "relative", overflow: "hidden",
-            background: "var(--card)",
-            border: "1px solid rgba(34,197,94,0.2)",
-            borderRadius: "var(--radius-xl)",
-            padding: "4rem 2rem",
-            textAlign: "center",
-          }}
-        >
-          <div style={{
-            position: "absolute", inset: 0, pointerEvents: "none",
-            backgroundImage: "linear-gradient(rgba(34,197,94,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.04) 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-          }} />
-          <div style={{
-            position: "absolute", top: "50%", left: "50%",
-            transform: "translate(-50%,-50%)",
-            width: 500, height: 300,
-            background: "radial-gradient(ellipse, rgba(34,197,94,0.08) 0%, transparent 70%)",
-            pointerEvents: "none",
-          }} />
-
-          <div style={{ position: "relative" }}>
-            <h2 style={{ fontSize: "2.2rem", fontWeight: 700, letterSpacing: "-0.035em", marginBottom: 12 }}>
-              Ready to ride?
-            </h2>
-            <p style={{ color: "var(--text2)", fontSize: "1.05rem", maxWidth: 360, margin: "0 auto 2rem" }}>
-              Drivers are standing by. Your first ride is one tap away.
-            </p>
-            <Link to="/ride" style={{ textDecoration: "none" }}>
-              <button className="btn btn-primary btn-lg" style={{
-                boxShadow: "0 0 32px rgba(34,197,94,0.25)",
-                padding: "14px 44px", fontSize: "1rem",
-              }}>
-                Book Now <FiArrowRight size={17} />
-              </button>
-            </Link>
+      <section id="faq" className="home-section home-faq-contact">
+        <div className="home-faq">
+          <div className="home-section-heading compact">
+            <span className="badge badge-orange">FAQ</span>
+            <h2>Frequently asked questions.</h2>
           </div>
-        </motion.div>
+
+          <div className="faq-list">
+            {faqs.map((faq, index) => {
+              const isOpen = openFaq === index;
+              return (
+                <div className="faq-item" key={faq.q}>
+                  <button type="button" onClick={() => setOpenFaq(isOpen ? null : index)}>
+                    <span>{faq.q}</span>
+                    <FiChevronDown className={isOpen ? "open" : ""} />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.p
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                      >
+                        {faq.a}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div id="contact" className="home-contact">
+          <div className="home-section-heading compact">
+            <span className="badge badge-green">Contact us</span>
+            <h2>Let us build the route together.</h2>
+            <p>Reach the BodaConnect team for support, demos, and deployment questions.</p>
+          </div>
+
+          <div className="contact-list">
+            <a href="mailto:support@bodaconnect.app">
+              <FiMail />
+              <span>support@bodaconnect.app</span>
+            </a>
+            <a href="tel:+255700000000">
+              <FiPhone />
+              <span>+255 700 000 000</span>
+            </a>
+            <span>
+              <FiMapPin />
+              <span>Dar es Salaam, Tanzania</span>
+            </span>
+            <span>
+              <FiMessageCircle />
+              <span>Response within 24 hours</span>
+            </span>
+          </div>
+        </div>
       </section>
 
+      <section className="home-final-cta">
+        <div>
+          <span className="badge badge-white">Ready now</span>
+          <h2>Book, accept, ride, complete.</h2>
+          <p>BodaConnect turns every trip into a clear live event.</p>
+        </div>
+        <Link to="/ride" className="btn btn-primary btn-lg">
+          Start Booking <FiArrowRight />
+        </Link>
+      </section>
     </div>
   );
 }
