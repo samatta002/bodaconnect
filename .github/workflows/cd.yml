@@ -247,6 +247,11 @@ jobs:
             git fetch origin main
             git checkout main
 
+            echo "Unlocking EC2 runtime files before pulling..."
+            docker compose -f docker-compose.prod.yml stop mqtt || true
+            sudo chown -R "$(id -u):$(id -g)" mosquitto/data mosquitto/log || true
+            sudo chmod -R u+rwX mosquitto/data mosquitto/log || true
+
             echo "Saving EC2-local runtime changes before pulling..."
             git stash push --include-untracked -m "pre-deploy-runtime-files-$(date +%Y%m%d%H%M%S)" || true
 
