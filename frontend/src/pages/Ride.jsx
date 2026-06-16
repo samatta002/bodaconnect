@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { FiNavigation, FiMapPin, FiCheck, FiX, FiChevronDown, FiLoader } from "react-icons/fi";
+import { FiNavigation, FiMapPin, FiCheck, FiX, FiChevronDown, FiLoader, FiClock, FiTruck, FiUser } from "react-icons/fi";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -22,6 +22,12 @@ const greyIcon = new L.Icon({
   iconUrl:   "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
   iconSize: [25,41], iconAnchor: [12,41], popupAnchor: [1,-34],
+});
+const driverIcon = L.divIcon({
+  className: "driver-live-marker",
+  html: "<div>➤</div>",
+  iconSize: [34, 34],
+  iconAnchor: [17, 17],
 });
 
 // Real Dar es Salaam locations with coordinates
@@ -184,6 +190,8 @@ export default function Ride() {
   const [status, setStatus]           = useState("idle");
   const [rideId, setRideId]           = useState(null);
   const [rideStatus, setRideStatus]   = useState(null);
+  const [tracking, setTracking]       = useState(null);
+  const [toast, setToast]             = useState(null);
 
   const dist = calcDist(pickup, destination);
   const fare = dist ? Math.round(dist * FARE_PER_KM) : null;
@@ -195,9 +203,13 @@ export default function Ride() {
       const res = await axios.post("/api/rides", {
         pickup: pickup.name,
         destination: destination?.name || "Not specified",
+        pickup_location: { latitude: pickup.lat, longitude: pickup.lng },
+        destination_location: destination ? { latitude: destination.lat, longitude: destination.lng } : null,
       });
       setRideId(res.data?.id || "—");
       setRideStatus(res.data?.status || "pending");
+      setTracking(null);
+      setToast({ type: "success", text: "Ride request sent. Waiting for a driver." });
       setStatus("success");
     } catch (err) {
       console.error(err);
@@ -208,24 +220,44 @@ export default function Ride() {
   const reset = () => {
     setPickup(null); setDestination(null);
     setStatus("idle"); setRideId(null); setRideStatus(null);
+    setTracking(null); setToast(null);
   };
 
   useEffect(() => {
     if (status !== "success" || !rideId) return;
+    let previousStatus = rideStatus;
 
-    const fetchRideStatus = async () => {
+    const fetchRideTracking = async () => {
       try {
-        const res = await axios.get(`/api/rides/${rideId}`);
-        setRideStatus(res.data?.status || "pending");
+        const res = await axios.get(`/api/rides/${rideId}/tracking`);
+        const nextStatus = res.data?.ride?.status || "pending";
+        setRideStatus(nextStatus);
+        setTracking(res.data || null);
+
+        if (previousStatus && previousStatus !== nextStatus) {
+          const message = {
+            active: "Driver accepted your ride and is on the way.",
+            completed: "Ride completed successfully.",
+            cancelled: "Ride was cancelled.",
+          }[nextStatus];
+          if (message) setToast({ type: nextStatus === "cancelled" ? "error" : "success", text: message });
+        }
+        previousStatus = nextStatus;
       } catch (err) {
         console.error(err);
       }
     };
 
-    fetchRideStatus();
-    const timer = setInterval(fetchRideStatus, 3000);
+    fetchRideTracking();
+    const timer = setInterval(fetchRideTracking, 3000);
     return () => clearInterval(timer);
   }, [status, rideId]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3200);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const mapCenter = pickup
     ? [pickup.lat, pickup.lng]
@@ -237,6 +269,11 @@ export default function Ride() {
     completed: "Ride completed successfully.",
     cancelled: "Ride was cancelled.",
   }[rideStatus] || "Waiting for ride updates.";
+  const driverLocation = tracking?.driver_location;
+  const driverPosition = driverLocation?.latitude && driverLocation?.longitude
+    ? [Number(driverLocation.latitude), Number(driverLocation.longitude)]
+    : null;
+  const progress = Math.min(Number(driverLocation?.progress_percent || 0), 100);
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden" }}>
@@ -262,6 +299,18 @@ export default function Ride() {
 
         {/* Success banner */}
         <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: -12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className={`ride-toast ${toast.type}`}
+            >
+              {toast.type === "error" ? <FiX /> : <FiCheck />}
+              <span>{toast.text}</span>
+            </motion.div>
+          )}
+
           {status === "success" && (
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
               style={{ margin: "1rem 1.25rem", padding: "1rem 1.25rem", borderRadius: 12,
@@ -302,6 +351,49 @@ export default function Ride() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {status === "success" && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="ride-live-tracker"
+          >
+            <div className="ride-tracker-head">
+              <div>
+                <span>Live Tracker</span>
+                <strong>{rideStatus === "active" ? "Driver on route" : rideStatus === "completed" ? "Trip complete" : "Finding driver"}</strong>
+              </div>
+              <div className={`ride-status-pill ${rideStatus || "pending"}`}>{rideStatus || "pending"}</div>
+            </div>
+
+            <div className="ride-progress">
+              <span style={{ width: `${progress}%` }} />
+            </div>
+
+            <div className="ride-tracker-grid">
+              <div>
+                <FiTruck />
+                <span>Driver</span>
+                <strong>{driverLocation?.driver_name || "Pending"}</strong>
+              </div>
+              <div>
+                <FiUser />
+                <span>Plate</span>
+                <strong>{driverLocation?.plate || "Waiting"}</strong>
+              </div>
+              <div>
+                <FiClock />
+                <span>Progress</span>
+                <strong>{progress}%</strong>
+              </div>
+            </div>
+
+            <div className="ride-tracker-location">
+              <FiMapPin />
+              <span>{driverLocation?.location_name || "Driver location will appear after acceptance."}</span>
+            </div>
+          </motion.div>
+        )}
 
         {/* Location selects */}
         {status !== "success" && (
@@ -406,6 +498,7 @@ export default function Ride() {
           <MapClickHandler setPickup={setPickup} setDestination={setDestination} pickup={pickup} />
           {pickup      && <Marker position={[pickup.lat, pickup.lng]}           icon={greenIcon}><Popup>{pickup.name}</Popup></Marker>}
           {destination && <Marker position={[destination.lat, destination.lng]} icon={greyIcon}><Popup>{destination.name}</Popup></Marker>}
+          {driverPosition && <Marker position={driverPosition} icon={driverIcon}><Popup>{driverLocation?.driver_name || "Driver"} is on route</Popup></Marker>}
         </MapContainer>
 
         {/* Bottom hint */}

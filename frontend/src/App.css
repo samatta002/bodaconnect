@@ -358,6 +358,169 @@ table thead th {
   overflow-y: auto; z-index: 10;
 }
 
+.ride-toast {
+  margin: 1rem 1.25rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+}
+
+.ride-toast.success {
+  border-color: rgba(34,197,94,0.24);
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.ride-toast.error {
+  border-color: rgba(239,68,68,0.24);
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.ride-live-tracker {
+  margin: 0 1.25rem 1rem;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.ride-tracker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.ride-tracker-head span,
+.ride-tracker-grid span {
+  display: block;
+  color: var(--text3);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ride-tracker-head strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
+.ride-status-pill {
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--amber);
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.22);
+}
+
+.ride-status-pill.active {
+  color: var(--green);
+  background: var(--green-dim);
+  border-color: rgba(34,197,94,0.24);
+}
+
+.ride-status-pill.completed {
+  color: var(--text2);
+  background: var(--white-dim);
+}
+
+.ride-status-pill.cancelled {
+  color: var(--red);
+  background: var(--red-dim);
+  border-color: rgba(239,68,68,0.22);
+}
+
+.ride-progress {
+  height: 8px;
+  border-radius: var(--radius-full);
+  margin: 1rem 0;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.ride-progress span {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), var(--blue));
+  transition: width 0.35s ease;
+}
+
+.ride-tracker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.ride-tracker-grid > div {
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.035);
+  border: 1px solid var(--border);
+}
+
+.ride-tracker-grid svg,
+.ride-tracker-location svg {
+  color: var(--green);
+  margin-bottom: 0.35rem;
+}
+
+.ride-tracker-grid strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.78rem;
+  margin-top: 0.25rem;
+  word-break: break-word;
+}
+
+.ride-tracker-location {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text2);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.ride-tracker-location svg {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.driver-live-marker {
+  background: transparent;
+  border: 0;
+}
+
+.driver-live-marker div {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  box-shadow: 0 0 0 6px rgba(34,197,94,0.18), 0 0 24px rgba(34,197,94,0.5);
+  transform: rotate(-45deg);
+}
+
 
 /* ════════════════════════════════════════
    DASHBOARD PAGE

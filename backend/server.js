@@ -54,6 +54,7 @@ const MQTT_HOST = process.env.MQTT_HOST || "localhost";
 const MQTT_PORT = process.env.MQTT_PORT || 1883;
 let mqttClient = null;
 let dbConnection = null;
+const latestRideLocations = new Map();
 
 function normalizeRideStatus(status) {
   if (status === "rejected") return "cancelled";
@@ -111,6 +112,25 @@ async function syncRideStatusFromMQTT(data) {
   console.log(`Synced ride #${rideId} from MQTT: ${previousStatus} -> ${status}`);
 }
 
+function syncDriverLocationFromMQTT(data) {
+  if (!data?.ride_id) return;
+
+  const rideId = Number(data.ride_id);
+  if (!Number.isInteger(rideId)) return;
+
+  latestRideLocations.set(rideId, {
+    ride_id: rideId,
+    driver_id: data.driver_id || null,
+    driver_name: data.driver_name || null,
+    plate: data.plate || null,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    location_name: data.location_name || "On route",
+    progress_percent: data.progress_percent || 0,
+    timestamp: data.timestamp || new Date().toISOString(),
+  });
+}
+
 function connectMQTT() {
   const url = `mqtt://${MQTT_HOST}:${MQTT_PORT}`;
   console.log(`Connecting to MQTT broker at ${url}...`);
@@ -141,6 +161,9 @@ function connectMQTT() {
       const data = JSON.parse(message.toString());
       if (topic === "ride/status") {
         await syncRideStatusFromMQTT(data);
+      }
+      if (topic === "driver/location") {
+        syncDriverLocationFromMQTT(data);
       }
       console.log(`📨 MQTT [${topic}]:`, data);
     } catch {
@@ -351,7 +374,7 @@ async function start() {
 
   // POST /rides — public, rider books a ride
   app.post("/rides", async (req, res) => {
-    const { pickup, destination } = req.body;
+    const { pickup, destination, pickup_location, destination_location } = req.body;
     if (!pickup) return res.status(400).json({ error: "pickup is required" });
     try {
       const [result] = await db.execute(
@@ -365,6 +388,8 @@ async function start() {
         ride_id: result.insertId,
         pickup,
         destination: destination || "Not specified",
+        pickup_location,
+        destination_location,
         status: "pending",
         message: "New ride request — drivers please respond",
       });
@@ -376,6 +401,23 @@ async function start() {
   });
 
   // PATCH /rides/:id/status — driver accepts or completes
+  app.get("/rides/:id/tracking", async (req, res) => {
+    try {
+      const rideId = Number(req.params.id);
+      const [rows] = await db.execute(
+        "SELECT id, pickup, destination, status, driver_id, created_at FROM rides WHERE id=?",
+        [rideId]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: "Ride not found" });
+      res.json({
+        ride: rows[0],
+        driver_location: latestRideLocations.get(rideId) || null,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/rides/:id", async (req, res) => {
     try {
       const [rows] = await db.execute(
