@@ -71,6 +71,13 @@ const content = {
     finalTitle: "Book, accept, ride, complete.",
     finalCopy: "BodaConnect turns every trip into a clear live event.",
     start: "Start Booking",
+    footerCopy: "Realtime boda boda booking, driver coordination, and ride visibility for everyday city movement.",
+    quickLinks: "Quick links",
+    legal: "Legal",
+    terms: "Terms & Conditions",
+    privacy: "Privacy Policy",
+    copyright: "All rights reserved.",
+    developer: "Developed by",
   },
   sw: {
     chip: "Uunganishaji wa safari mubashara",
@@ -122,6 +129,13 @@ const content = {
     finalTitle: "Agiza, kubali, safiri, kamilisha.",
     finalCopy: "BodaConnect hufanya kila safari kuwa tukio la wazi na mubashara.",
     start: "Anza Booking",
+    footerCopy: "Booking ya boda boda mubashara, uratibu wa madereva, na ufuatiliaji wa safari kwa usafiri wa kila siku mjini.",
+    quickLinks: "Viungo",
+    legal: "Sheria",
+    terms: "Vigezo na Masharti",
+    privacy: "Sera ya Faragha",
+    copyright: "Haki zote zimehifadhiwa.",
+    developer: "Imetengenezwa na",
   },
 };
 
@@ -295,6 +309,40 @@ export default function Home({ lang = "en" }) {
         </div>
         <Link to="/ride" className="btn btn-primary btn-lg">{t.start} <FiArrowRight /></Link>
       </section>
+
+      <footer className="home-footer">
+        <div className="home-footer-brand">
+          <Link to="/" className="home-footer-logo">
+            <span>Boda</span><strong>Connect</strong>
+          </Link>
+          <p>{t.footerCopy}</p>
+          <span className="home-footer-credit">
+            {t.developer} <strong>Mbwana Ally</strong>
+          </span>
+        </div>
+
+        <div className="home-footer-links">
+          <div>
+            <h3>{t.quickLinks}</h3>
+            <a href="#about">About</a>
+            <a href="#faq">FAQ</a>
+            <a href="#contact">Contact</a>
+            <Link to="/ride">{t.book}</Link>
+          </div>
+          <div>
+            <h3>{t.legal}</h3>
+            <a href="#terms">{t.terms}</a>
+            <a href="#privacy">{t.privacy}</a>
+            <a href="mailto:support@bodaconnect.app">Support</a>
+          </div>
+        </div>
+
+        <div className="home-footer-legal">
+          <span>&copy; {new Date().getFullYear()} BodaConnect. {t.copyright}</span>
+          <span id="terms">{t.terms}: Ride requests, driver acceptance, and trip updates depend on network and service availability.</span>
+          <span id="privacy">{t.privacy}: BodaConnect uses trip and driver details only to coordinate bookings and improve service visibility.</span>
+        </div>
+      </footer>
     </div>
   );
 }
