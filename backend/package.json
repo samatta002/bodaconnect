@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node tests/api.test.js",
-    "logs": "node scripts/collect-logs.js"
+    "logs": "node scripts/collect-logs.js",
+    "measure:mqtt": "node scripts/measure-mqtt-latency.js"
   },
   "license": "ISC",
   "type": "commonjs",

@@ -38,6 +38,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Start CI measurement timer
+        run: |
+          echo "PIPELINE_START=$(date +%s)" >> $GITHUB_ENV
+          mkdir -p reports
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -74,13 +79,57 @@ jobs:
           done
 
       - name: Run API tests
+        id: api_tests
+        continue-on-error: true
         working-directory: backend
-        run: npm test
+        run: |
+          mkdir -p ../reports
+          npm test 2>&1 | tee ../reports/api-test-output.txt
 
       - name: Verify MQTT broker is running
+        id: mqtt_health
+        if: always()
+        continue-on-error: true
         run: |
           echo "Checking MQTT status..."
-          curl -s http://localhost:5000/mqtt/status || echo "MQTT check done"
+          curl -fsS http://localhost:5000/mqtt/status | tee reports/mqtt-status.json
+
+      - name: Save CI measurement report
+        if: always()
+        run: |
+          END=$(date +%s)
+          DURATION=$((END - PIPELINE_START))
+          cat > reports/ci-metrics.md <<EOF
+          # BodaConnect CI Measurement Report
+
+          Commit: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          Workflow run: ${{ github.run_id }}
+          Total test job time: ${DURATION} seconds
+          API test result: ${{ steps.api_tests.outcome }}
+          MQTT health result: ${{ steps.mqtt_health.outcome }}
+
+          Baseline metrics captured for CS 421 Assignment 4:
+          - Build/test duration
+          - Test success or failure
+          - MQTT broker health
+          - Commit and workflow traceability
+          EOF
+          cat reports/ci-metrics.md
+
+      - name: Upload CI measurement artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-measurement-report
+          path: |
+            reports/ci-metrics.md
+            reports/api-test-output.txt
+            reports/mqtt-status.json
+
+      - name: Fail if API tests failed
+        if: steps.api_tests.outcome != 'success'
+        run: exit 1
 
 
   # ══════════════════════════════════════
@@ -94,6 +143,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Start build measurement timer
+        run: |
+          echo "BUILD_PUSH_START=$(date +%s)" >> $GITHUB_ENV
+          mkdir -p reports
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -172,3 +226,27 @@ jobs:
         with:
           name: dockerhub-push-report
           path: reports/dockerhub-push.txt
+
+      - name: Save build measurement report
+        if: always()
+        run: |
+          END=$(date +%s)
+          DURATION=$((END - BUILD_PUSH_START))
+          cat > reports/build-metrics.md <<EOF
+          # BodaConnect Build and Push Measurement Report
+
+          Commit: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          Workflow run: ${{ github.run_id }}
+          Build and Docker Hub push time: ${DURATION} seconds
+          Backend image tag: ${{ secrets.DOCKERHUB_USERNAME }}/bodaconnect-backend:${{ steps.version.outputs.SHA_TAG }}
+          Frontend image tag: ${{ secrets.DOCKERHUB_USERNAME }}/bodaconnect-frontend:${{ steps.version.outputs.SHA_TAG }}
+          EOF
+          cat reports/build-metrics.md
+
+      - name: Upload build measurement artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-measurement-report
+          path: reports/build-metrics.md

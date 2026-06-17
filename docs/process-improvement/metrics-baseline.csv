@@ -1,0 +1,10 @@
+date,commit,metric,value,unit,source,notes
+2026-06-17,replace-with-commit,api_test_success_rate,87.5,percent,GitHub Actions,Observed example when API tests reported 7 passed and 1 failed
+2026-06-17,replace-with-commit,api_tests_failed,1,count,GitHub Actions,POST /rides expected 201 but received 400
+2026-06-17,replace-with-commit,aws_port_5173_reachable,1,boolean,PowerShell Test-NetConnection,Frontend port test returned true
+2026-06-17,replace-with-commit,aws_port_5000_reachable,1,boolean,PowerShell Test-NetConnection,Backend port test returned true
+2026-06-17,replace-with-commit,aws_port_1883_reachable,1,boolean,PowerShell Test-NetConnection,MQTT port test returned true
+2026-06-17,replace-with-commit,ci_test_job_time,replace-with-value,seconds,ci-measurement-report,Use artifact from next CI run
+2026-06-17,replace-with-commit,docker_build_push_time,replace-with-value,seconds,build-measurement-report,Use artifact from next CI run
+2026-06-17,replace-with-commit,mqtt_latency_avg,replace-with-value,ms,npm run measure:mqtt,Run against local or AWS MQTT broker
+2026-06-17,replace-with-commit,deployment_downtime,replace-with-value,seconds,CD health checks or Grafana,Measure until backend/frontend/MQTT health checks pass

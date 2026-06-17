@@ -147,6 +147,7 @@ async function syncRideStatusFromMQTT(data) {
       driver_name: data.driver_name || previousLocation.driver_name || null,
       plate: data.plate || previousLocation.plate || null,
       driver_photo_url: data.driver_photo_url || previousLocation.driver_photo_url || null,
+      location_name: data.location_name || previousLocation.location_name || null,
       progress_percent: status === "completed" ? 100 : previousLocation.progress_percent || (status === "active" ? 50 : status === "accepted" ? 15 : 0),
       timestamp: data.timestamp || new Date().toISOString(),
     });
@@ -747,11 +748,17 @@ async function start() {
 
     try {
       const [currentRows] = await db.execute(
-        "SELECT status, driver_id FROM rides WHERE id=?",
+        "SELECT status, driver_id, pickup FROM rides WHERE id=?",
         [req.params.id]
       );
       if (currentRows.length === 0) return res.status(404).json({ error: "Ride not found" });
-      const previousStatus = currentRows[0].status;
+      const currentRide = currentRows[0];
+      const previousStatus = currentRide.status;
+      const [driverRows] = await db.execute(
+        "SELECT id, name, plate, photo_url FROM drivers WHERE id=?",
+        [req.driver.id]
+      );
+      const driver = driverRows[0] || req.driver;
 
       await db.execute(
         "UPDATE rides SET status=?, driver_id=? WHERE id=?",
@@ -793,12 +800,34 @@ async function start() {
 
       mqttPublish("ride/status", {
         ride_id: parseInt(req.params.id),
-        driver_id: req.driver.id,
-        driver_name: req.driver.name,
-        plate: req.driver.plate,
+        driver_id: driver.id || req.driver.id,
+        driver_name: driver.name || req.driver.name,
+        plate: driver.plate || req.driver.plate,
+        driver_photo_url: driver.photo_url || null,
         status: nextStatus,
+        location_name: nextStatus === "accepted"
+          ? `Heading to pickup: ${currentRide.pickup || "passenger pickup"}`
+          : undefined,
         message: statusMessages[nextStatus] || `Ride status updated to ${nextStatus}`,
       });
+
+      if (["accepted", "active", "completed"].includes(nextStatus)) {
+        const rideId = Number(req.params.id);
+        const previousLocation = latestRideLocations.get(rideId) || {};
+        latestRideLocations.set(rideId, {
+          ...previousLocation,
+          ride_id: rideId,
+          driver_id: driver.id || req.driver.id,
+          driver_name: driver.name || req.driver.name,
+          plate: driver.plate || req.driver.plate,
+          driver_photo_url: driver.photo_url || previousLocation.driver_photo_url || null,
+          location_name: nextStatus === "accepted"
+            ? `Heading to pickup: ${currentRide.pickup || "passenger pickup"}`
+            : previousLocation.location_name,
+          progress_percent: nextStatus === "completed" ? 100 : previousLocation.progress_percent || (nextStatus === "active" ? 50 : 15),
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       res.json({ success: true });
     } catch (err) {

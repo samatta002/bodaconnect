@@ -264,6 +264,7 @@ export default function Ride({ onNotify }) {
   const [rideId, setRideId]           = useState(null);
   const [rideStatus, setRideStatus]   = useState(null);
   const [tracking, setTracking]       = useState(null);
+  const [eventDriver, setEventDriver] = useState(null);
   const [toast, setToast]             = useState(null);
   const [nearbyDrivers, setNearbyDrivers] = useState([]);
   const [reviewRating, setReviewRating] = useState(5);
@@ -294,6 +295,7 @@ export default function Ride({ onNotify }) {
       setRideId(res.data?.id || "—");
       setRideStatus(res.data?.status || "pending");
       setTracking(null);
+      setEventDriver(null);
       notify({ type: "success", text: "Ride request sent. Waiting for a driver." });
       setStatus("success");
     } catch (err) {
@@ -322,7 +324,7 @@ export default function Ride({ onNotify }) {
     setPickup(null); setDestination(null);
     setPassengerName(""); setPassengerPhone("");
     setStatus("idle"); setRideId(null); setRideStatus(null);
-    setTracking(null); setToast(null); setSubmittedReview(null); setReviewRating(5); setReviewComment(""); setRideEvents([]);
+    setTracking(null); setEventDriver(null); setToast(null); setSubmittedReview(null); setReviewRating(5); setReviewComment(""); setRideEvents([]);
   };
 
   const cancelRide = async () => {
@@ -348,6 +350,9 @@ export default function Ride({ onNotify }) {
         const nextStatus = res.data?.ride?.status || "pending";
         setRideStatus(nextStatus);
         setTracking(res.data || null);
+        if (res.data?.driver?.id || res.data?.driver?.name || res.data?.driver?.plate) {
+          setEventDriver(res.data.driver);
+        }
         setSubmittedReview(res.data?.review || null);
 
         if (previousStatus && previousStatus !== nextStatus) {
@@ -385,6 +390,16 @@ export default function Ride({ onNotify }) {
         const event = JSON.parse(message.data);
         const payload = event.payload?.payload || event.payload || {};
         if (Number(payload.ride_id) !== Number(rideId)) return;
+        if (payload.status) setRideStatus(payload.status);
+        if (payload.driver_id || payload.driver_name || payload.plate || payload.driver_photo_url) {
+          setEventDriver((current) => ({
+            id: payload.driver_id || current?.id || null,
+            name: payload.driver_name || current?.name || null,
+            plate: payload.plate || current?.plate || null,
+            photo_url: payload.driver_photo_url || current?.photo_url || null,
+            rating: current?.rating || null,
+          }));
+        }
         setRideEvents((current) => [event, ...current].slice(0, 6));
       } catch {
         // Ignore malformed event stream messages.
@@ -402,7 +417,7 @@ export default function Ride({ onNotify }) {
   const ridePhase = RIDE_PHASES[rideStatus] || RIDE_PHASES.pending;
   const rideStatusText = ridePhase.detail;
   const driverLocation = tracking?.driver_location;
-  const assignedDriver = tracking?.driver;
+  const assignedDriver = tracking?.driver || eventDriver;
   const driverPosition = driverLocation?.latitude && driverLocation?.longitude
     ? [Number(driverLocation.latitude), Number(driverLocation.longitude)]
     : null;

@@ -243,6 +243,7 @@ jobs:
           script: |
             set -e
             cd ~/bodaconnect
+            PREVIOUS_COMMIT="$(git rev-parse HEAD)"
 
             echo "Fetching latest main from GitHub..."
             git fetch origin main
@@ -270,9 +271,16 @@ jobs:
             docker compose -f docker-compose.prod.yml ps
 
             echo "Running live health checks..."
-            curl -fsS http://localhost:5000/ >/dev/null
-            curl -fsS http://localhost:5173/ >/dev/null
-            curl -fsS http://localhost:5000/mqtt/status >/dev/null
+            if ! curl -fsS http://localhost:5000/ >/dev/null ||
+               ! curl -fsS http://localhost:5173/ >/dev/null ||
+               ! curl -fsS http://localhost:5000/mqtt/status >/dev/null; then
+              echo "Health checks failed. Rolling back to previous commit: ${PREVIOUS_COMMIT}"
+              git checkout "${PREVIOUS_COMMIT}"
+              docker compose -f docker-compose.prod.yml build --no-cache frontend backend
+              docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
+              echo "Rollback complete. Deployment failed health checks."
+              exit 1
+            fi
 
             echo "================================================"
             echo "  AWS EC2 DEPLOYMENT COMPLETE"
