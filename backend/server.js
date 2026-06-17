@@ -546,6 +546,25 @@ async function start() {
   });
 
   // POST /rides — public, rider books a ride
+  app.get("/driver/rides/history", authMiddleware, async (req, res) => {
+    try {
+      const [rows] = await db.execute(
+        `SELECT
+          r.id, r.passenger_name, r.passenger_phone, r.pickup, r.destination,
+          r.status, r.created_at,
+          rr.rating AS review_rating, rr.comment AS review_comment, rr.created_at AS reviewed_at
+         FROM rides r
+         LEFT JOIN ride_reviews rr ON rr.ride_id = r.id
+         WHERE r.driver_id=? AND r.status IN ('completed','cancelled')
+         ORDER BY r.id DESC`,
+        [req.driver.id]
+      );
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/rides", async (req, res) => {
     const { passenger_name, passenger_phone, pickup, destination, pickup_location, destination_location } = req.body;
     const pickupLat = pickup_location?.latitude ?? null;

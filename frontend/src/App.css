@@ -857,6 +857,43 @@ table thead th {
 ════════════════════════════════════════ */
 .dashboard-page { flex: 1; overflow-y: auto; background: var(--bg); }
 
+.dashboard-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--bg3);
+}
+
+.dashboard-tabs button {
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text3);
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dashboard-tabs button.active {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.dashboard-table-meta {
+  padding: 0.8rem 20px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+
 
 /* ════════════════════════════════════════
    TABLE

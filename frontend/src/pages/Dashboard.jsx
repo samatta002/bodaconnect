@@ -79,8 +79,11 @@ function describeLiveEvent(event) {
 
 export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }) {
   const [rides, setRides]         = useState([]);
+  const [history, setHistory]     = useState([]);
   const [loading, setLoading]     = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError]         = useState(null);
+  const [view, setView]           = useState("active");
   const [accepting, setAccepting] = useState(null);
   const [hovered, setHovered]     = useState(null);
   const [driverStatus, setDriverStatus] = useState(driver?.status || "available");
@@ -106,9 +109,26 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
     }
   };
 
+  const fetchHistory = async ({ silent = false } = {}) => {
+    if (!silent) setHistoryLoading(true);
+    try {
+      const res = await axios.get(`${API}/driver/rides/history`, getAuth());
+      setHistory(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      if (err.response?.status === 401) onLogout();
+      else if (!silent) notify({ type: "error", text: "Could not load ride history." });
+    } finally {
+      if (!silent) setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchRides();
-    const timer = setInterval(() => fetchRides({ silent: true }), 3000);
+    fetchHistory();
+    const timer = setInterval(() => {
+      fetchRides({ silent: true });
+      fetchHistory({ silent: true });
+    }, 3000);
     return () => clearInterval(timer);
   }, []);
 
@@ -123,6 +143,7 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
         const topic = event.payload?.topic;
         if (topic === "ride/request" || topic === "ride/status" || event.type.startsWith("ride.")) {
           fetchRides({ silent: true });
+          fetchHistory({ silent: true });
         }
       } catch {
         // Ignore malformed event stream messages.
@@ -207,6 +228,7 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
   const pending   = rides.filter(r => r.status === "pending").length;
   const completed = rides.filter(r => r.status === "completed").length;
   const revenue   = completed * 3200;
+  const activeRides = rides.filter(r => ["pending", "accepted", "active"].includes(r.status));
 
   const statCards = [
     { label: "Total Rides",   value: rides.length, sub: "All requests",      up: true,  icon: <FiTruck size={17} />,      color: "var(--text)",  dim: "var(--white-dim2)"     },
@@ -360,31 +382,68 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
 
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
-              <h3 style={{ fontSize: "0.95rem", fontWeight: 600, marginBottom: 2 }}>All Rides</h3>
-              <p style={{ fontSize: "0.75rem", color: "var(--text3)" }}>Accept requests, start trips at pickup, then complete at destination</p>
+              <h3 style={{ fontSize: "0.95rem", fontWeight: 600, marginBottom: 2 }}>{view === "active" ? "Active Requests" : "Ride History"}</h3>
+              <p style={{ fontSize: "0.75rem", color: "var(--text3)" }}>
+                {view === "active" ? "Accept requests, start trips at pickup, then complete at destination" : "Completed and cancelled rides assigned to you"}
+              </p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span className="badge badge-muted">{rides.length} total</span>
-              {active  > 0 && <span className="badge badge-green">{active} active</span>}
-              {pending > 0 && <span className="badge badge-orange">{pending} pending</span>}
+              <div className="dashboard-tabs">
+                <button type="button" className={view === "active" ? "active" : ""} onClick={() => setView("active")}>
+                  Active
+                </button>
+                <button type="button" className={view === "history" ? "active" : ""} onClick={() => setView("history")}>
+                  History
+                </button>
+              </div>
             </div>
           </div>
 
-          {loading && (
+          {view === "active" && (
+            <div className="dashboard-table-meta">
+              <span className="badge badge-muted">{activeRides.length} active view</span>
+              {active  > 0 && <span className="badge badge-green">{active} active</span>}
+              {pending > 0 && <span className="badge badge-orange">{pending} pending</span>}
+            </div>
+          )}
+
+          {view === "history" && (
+            <div className="dashboard-table-meta">
+              <span className="badge badge-muted">{history.length} historical</span>
+              <span className="badge badge-green">{history.filter(r => r.status === "completed").length} completed</span>
+              <span className="badge badge-red">{history.filter(r => r.status === "cancelled").length} cancelled</span>
+            </div>
+          )}
+
+          {view === "active" && loading && (
             <div style={{ padding: "1.5rem 20px", display: "flex", flexDirection: "column", gap: 10 }}>
               {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 44, borderRadius: 6 }} />)}
             </div>
           )}
 
-          {!loading && rides.length === 0 && (
-            <div style={{ padding: "4rem", textAlign: "center", color: "var(--text3)" }}>
-              <FiTruck size={36} style={{ marginBottom: 14, opacity: 0.3 }} />
-              <p style={{ fontSize: "0.9rem", marginBottom: 6 }}>No rides yet</p>
-              <p style={{ fontSize: "0.8rem", opacity: 0.7 }}>Rides booked from the Ride page will appear here</p>
+          {view === "history" && historyLoading && (
+            <div style={{ padding: "1.5rem 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 44, borderRadius: 6 }} />)}
             </div>
           )}
 
-          {!loading && rides.length > 0 && (
+          {view === "active" && !loading && activeRides.length === 0 && (
+            <div style={{ padding: "4rem", textAlign: "center", color: "var(--text3)" }}>
+              <FiTruck size={36} style={{ marginBottom: 14, opacity: 0.3 }} />
+              <p style={{ fontSize: "0.9rem", marginBottom: 6 }}>No active rides</p>
+              <p style={{ fontSize: "0.8rem", opacity: 0.7 }}>New passenger requests will appear here</p>
+            </div>
+          )}
+
+          {view === "history" && !historyLoading && history.length === 0 && (
+            <div style={{ padding: "4rem", textAlign: "center", color: "var(--text3)" }}>
+              <FiClock size={36} style={{ marginBottom: 14, opacity: 0.3 }} />
+              <p style={{ fontSize: "0.9rem", marginBottom: 6 }}>No ride history yet</p>
+              <p style={{ fontSize: "0.8rem", opacity: 0.7 }}>Completed and cancelled rides will appear here</p>
+            </div>
+          )}
+
+          {view === "active" && !loading && activeRides.length > 0 && (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
                 <thead>
@@ -400,7 +459,7 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
                   </tr>
                 </thead>
                 <tbody>
-                  {rides.map((r, i) => (
+                  {activeRides.map((r, i) => (
                     <tr key={r.id || i}
                       onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}
                       style={{
@@ -467,6 +526,67 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
                             <FiAlertCircle size={13} /> Cancelled
                           </span>
                         )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {view === "history" && !historyLoading && history.length > 0 && (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
+                <thead>
+                  <tr>
+                    {["ID", "Passenger", "Route", "Status", "Review", "Date"].map(h => (
+                      <th key={h} style={{
+                        padding: "11px 20px", textAlign: "left",
+                        fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.08em",
+                        textTransform: "uppercase", color: "var(--text3)",
+                        background: "var(--bg3)", borderBottom: "1px solid var(--border)",
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((r, i) => (
+                    <tr key={r.id || i}
+                      style={{
+                        borderBottom: i < history.length - 1 ? "1px solid var(--border)" : "none",
+                      }}>
+                      <td style={{ padding: "13px 20px" }}>
+                        <span style={{ fontFamily: "var(--mono)", fontSize: "0.78rem", color: "var(--text3)" }}>
+                          #{String(r.id || i+1).padStart(3,"0")}
+                        </span>
+                      </td>
+                      <td style={{ padding: "13px 20px" }}>
+                        <div style={{ fontSize: "0.83rem", color: "var(--text2)", fontWeight: 600 }}>{r.passenger_name || "Passenger"}</div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text3)", marginTop: 2 }}>{r.passenger_phone || "No phone"}</div>
+                      </td>
+                      <td style={{ padding: "13px 20px" }}>
+                        <div style={{ fontSize: "0.83rem", color: "var(--text2)" }}>{r.pickup}</div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text3)", marginTop: 2 }}>to {r.destination || "destination"}</div>
+                      </td>
+                      <td style={{ padding: "13px 20px" }}>
+                        <StatusBadge status={r.status} />
+                      </td>
+                      <td style={{ padding: "13px 20px", minWidth: 180 }}>
+                        {r.review_rating ? (
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.8rem", fontWeight: 700 }}>
+                              <FiStar size={13} /> {r.review_rating}/5
+                            </div>
+                            {r.review_comment && <div style={{ color: "var(--text3)", fontSize: "0.74rem", marginTop: 4 }}>{r.review_comment}</div>}
+                          </div>
+                        ) : (
+                          <span style={{ color: "var(--text3)", fontSize: "0.78rem" }}>No review</span>
+                        )}
+                      </td>
+                      <td style={{ padding: "13px 20px" }}>
+                        <span style={{ color: "var(--text3)", fontSize: "0.78rem" }}>
+                          {r.created_at ? new Date(r.created_at).toLocaleString() : "Unknown"}
+                        </span>
                       </td>
                     </tr>
                   ))}
