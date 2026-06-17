@@ -1083,6 +1083,34 @@ tbody tr:hover td { background: var(--bg3); color: var(--text); }
   font-weight: 700;
 }
 
+.driver-alert-toggle {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(255,255,255,0.035);
+  color: var(--text3);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.driver-alert-toggle:hover {
+  transform: translateY(-1px);
+  border-color: rgba(245,158,11,0.28);
+  color: var(--amber);
+}
+
+.driver-alert-toggle.enabled {
+  background: rgba(245,158,11,0.10);
+  border-color: rgba(245,158,11,0.24);
+  color: var(--amber);
+}
+
 .app-floating-controls {
   position: fixed;
   left: 18px;

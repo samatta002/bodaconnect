@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
 import {
   FiTruck, FiCheckCircle, FiClock, FiDollarSign,
   FiRefreshCw, FiAlertCircle, FiActivity,
-  FiArrowUpRight, FiArrowDownRight, FiStar, FiPower, FiRadio,
+  FiArrowUpRight, FiArrowDownRight, FiStar, FiPower, FiRadio, FiBell,
 } from "react-icons/fi";
 
 const API = "/api";
@@ -89,8 +89,80 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
   const [driverStatus, setDriverStatus] = useState(driver?.status || "available");
   const [savingStatus, setSavingStatus] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
+  const [alertsEnabled, setAlertsEnabled] = useState(() => localStorage.getItem("bc_driver_alerts") === "true");
+  const [notificationPermission, setNotificationPermission] = useState(() => {
+    return typeof Notification === "undefined" ? "unsupported" : Notification.permission;
+  });
+  const alertedRideIds = useRef(new Set());
+  const mountedAt = useRef(Date.now());
+  const alertsEnabledRef = useRef(alertsEnabled);
+  const isOnlineRef = useRef(driverStatus !== "offline");
   const isOnline = driverStatus !== "offline";
   const notify = (toast) => onNotify?.(toast);
+
+  useEffect(() => {
+    alertsEnabledRef.current = alertsEnabled;
+    isOnlineRef.current = isOnline;
+  }, [alertsEnabled, isOnline]);
+
+  const playRideAlert = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+
+      const ctx = new AudioContext();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      oscillator.frequency.setValueAtTime(660, ctx.currentTime + 0.14);
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.32);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.34);
+      setTimeout(() => ctx.close(), 500);
+    } catch {
+      // Audio alerts are best-effort because browsers can block audio.
+    }
+  };
+
+  const requestDriverAlerts = async () => {
+    localStorage.setItem("bc_driver_alerts", "true");
+    setAlertsEnabled(true);
+
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      notify({
+        type: permission === "granted" ? "success" : "error",
+        text: permission === "granted" ? "Ride notifications enabled." : "Sound alerts enabled. Browser notifications are blocked.",
+      });
+    } else {
+      setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
+      notify({ type: "success", text: "Ride sound alerts enabled." });
+    }
+
+    playRideAlert();
+  };
+
+  const alertNewRide = (payload) => {
+    const rideId = payload?.ride_id;
+    if (!alertsEnabledRef.current || !isOnlineRef.current || !rideId || alertedRideIds.current.has(rideId)) return;
+
+    alertedRideIds.current.add(rideId);
+    playRideAlert();
+    notify({ type: "success", text: `New ride request from ${payload.pickup || "a passenger"}.` });
+
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      new Notification("New BodaConnect ride request", {
+        body: `${payload.pickup || "Pickup"} to ${payload.destination || "destination"}`,
+        icon: "/favicon.svg",
+      });
+    }
+  };
 
   const fetchRides = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -141,6 +213,9 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
         setLiveEvents((current) => [event, ...current].slice(0, 8));
 
         const topic = event.payload?.topic;
+        if (topic === "ride/request" && event.id >= mountedAt.current) {
+          alertNewRide(event.payload?.payload || {});
+        }
         if (topic === "ride/request" || topic === "ride/status" || event.type.startsWith("ride.")) {
           fetchRides({ silent: true });
           fetchHistory({ silent: true });
@@ -290,6 +365,15 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
               <strong>Driver Mode</strong>
               <small>{savingStatus ? "Updating..." : isOnline ? "Online" : "Offline"}</small>
             </span>
+          </button>
+          <button
+            type="button"
+            onClick={requestDriverAlerts}
+            className={`driver-alert-toggle ${alertsEnabled ? "enabled" : ""}`}
+            title={alertsEnabled ? "Ride alerts enabled" : "Enable ride alerts"}
+          >
+            <FiBell size={13} />
+            <span>{alertsEnabled ? "Alerts On" : "Enable Alerts"}</span>
           </button>
           {driver?.plate && (
             <div style={{
