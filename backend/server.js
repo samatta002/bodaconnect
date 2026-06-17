@@ -76,7 +76,7 @@ function recordEvent(type, payload = {}) {
 
 function normalizeRideStatus(status) {
   if (status === "rejected") return "cancelled";
-  if (["pending", "active", "completed", "cancelled"].includes(status)) return status;
+  if (["pending", "accepted", "active", "completed", "cancelled"].includes(status)) return status;
   return null;
 }
 
@@ -110,13 +110,13 @@ async function syncRideStatusFromMQTT(data) {
   );
 
   if (previousStatus !== status) {
-    if (status === "active") ridesAccepted.inc();
+    if (status === "accepted") ridesAccepted.inc();
 
-    if (previousStatus !== "active" && status === "active") {
+    if (!["accepted", "active"].includes(previousStatus) && ["accepted", "active"].includes(status)) {
       activeRidesGauge.inc();
     }
 
-    if (previousStatus === "active" && ["completed", "cancelled"].includes(status)) {
+    if (["accepted", "active"].includes(previousStatus) && ["completed", "cancelled"].includes(status)) {
       activeRidesGauge.dec();
     }
 
@@ -139,7 +139,7 @@ async function syncRideStatusFromMQTT(data) {
       driver_name: data.driver_name || previousLocation.driver_name || null,
       plate: data.plate || previousLocation.plate || null,
       driver_photo_url: data.driver_photo_url || previousLocation.driver_photo_url || null,
-      progress_percent: status === "completed" ? 100 : previousLocation.progress_percent || (status === "active" ? 15 : 0),
+      progress_percent: status === "completed" ? 100 : previousLocation.progress_percent || (status === "active" ? 50 : status === "accepted" ? 15 : 0),
       timestamp: data.timestamp || new Date().toISOString(),
     });
   }
@@ -306,11 +306,17 @@ async function start() {
       id INT AUTO_INCREMENT PRIMARY KEY,
       pickup VARCHAR(255) NOT NULL,
       destination VARCHAR(255),
-      status ENUM('pending','active','completed','cancelled') DEFAULT 'pending',
+      status ENUM('pending','accepted','active','completed','cancelled') DEFAULT 'pending',
       driver_id INT DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  try {
+    await db.execute("ALTER TABLE rides MODIFY status ENUM('pending','accepted','active','completed','cancelled') DEFAULT 'pending'");
+  } catch (err) {
+    console.log("Could not update rides status enum:", err.message);
+  }
 
   console.log("✅ Tables ready");
 
@@ -327,7 +333,7 @@ async function start() {
     )
   `);
 
-  const [activeRows] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status='active'");
+  const [activeRows] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status IN ('accepted','active')");
   activeRidesGauge.set(activeRows[0].count);
   const [revRows] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status='completed'");
   revenueGauge.set(revRows[0].count * 3200);
@@ -636,17 +642,22 @@ async function start() {
 
   app.patch("/rides/:id/status", authMiddleware, async (req, res) => {
     const { status } = req.body;
+    const nextStatus = normalizeRideStatus(status);
+    if (!nextStatus || nextStatus === "pending") {
+      return res.status(400).json({ error: "Unsupported ride status" });
+    }
+
     try {
       await db.execute(
         "UPDATE rides SET status=?, driver_id=? WHERE id=?",
-        [status, req.driver.id, req.params.id]
+        [nextStatus, req.driver.id, req.params.id]
       );
 
-      if (status === "active") {
+      if (nextStatus === "accepted") {
         ridesAccepted.inc();
         activeRidesGauge.inc();
       }
-      if (status === "completed") {
+      if (nextStatus === "completed") {
         ridesCompleted.inc();
         activeRidesGauge.dec();
         const [rev] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status='completed'");
@@ -655,7 +666,8 @@ async function start() {
 
       // ── OPTION C: Publish ride status update to MQTT ──
       const statusMessages = {
-        active:    "Driver accepted — on the way",
+        accepted: "Driver accepted - heading to passenger pickup",
+        active: "Passenger picked up - heading to destination",
         completed: "Ride completed successfully",
         cancelled: "Ride was cancelled",
       };
@@ -665,8 +677,8 @@ async function start() {
         driver_id: req.driver.id,
         driver_name: req.driver.name,
         plate: req.driver.plate,
-        status,
-        message: statusMessages[status] || `Ride status updated to ${status}`,
+        status: nextStatus,
+        message: statusMessages[nextStatus] || `Ride status updated to ${nextStatus}`,
       });
 
       res.json({ success: true });

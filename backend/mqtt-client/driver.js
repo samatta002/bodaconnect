@@ -87,20 +87,26 @@ function interpolate(start, end, progress) {
   };
 }
 
-function startTripSimulation(ride) {
-  const pickup = ride.pickup_location || { latitude: -6.8160, longitude: 39.2738 };
-  const destination = ride.destination_location || { latitude: -6.7726, longitude: 39.2285 };
+function pointNear(point, offsetLat = -0.015, offsetLng = 0.012) {
+  return {
+    latitude: Number(point.latitude) + offsetLat,
+    longitude: Number(point.longitude) + offsetLng,
+  };
+}
+
+function simulateLeg({ ride, from, to, label, locationName, destinationName, startPercent, endPercent, onDone }) {
   const steps = Number(process.env.TRIP_STEPS || 10);
   const intervalMs = Number(process.env.TRIP_INTERVAL_MS || 5000);
   let step = 0;
 
-  console.log(`\nStarting live location updates for ride #${ride.ride_id}`);
+  console.log(`\n${label} for ride #${ride.ride_id}`);
   console.log(`Updates: ${steps} steps, every ${intervalMs / 1000}s\n`);
 
   const timer = setInterval(() => {
     step += 1;
     const progress = Math.min(step / steps, 1);
-    const location = interpolate(pickup, destination, progress);
+    const location = interpolate(from, to, progress);
+    const progressPercent = Math.round(startPercent + (endPercent - startPercent) * progress);
 
     publish("driver/location", {
       ride_id: ride.ride_id,
@@ -109,25 +115,67 @@ function startTripSimulation(ride) {
       plate: DRIVER.plate,
       latitude: location.latitude,
       longitude: location.longitude,
-      location_name: progress >= 1 ? ride.destination : `On route to ${ride.destination}`,
-      progress_percent: Math.round(progress * 100),
+      location_name: progress >= 1 ? destinationName : locationName,
+      progress_percent: progressPercent,
     });
 
-    console.log(`Location sent for ride #${ride.ride_id}: ${Math.round(progress * 100)}%`);
+    console.log(`Location sent for ride #${ride.ride_id}: ${progressPercent}%`);
 
     if (progress >= 1) {
       clearInterval(timer);
+      onDone?.();
+    }
+  }, intervalMs);
+}
+
+function startTripSimulation(ride) {
+  const pickup = ride.pickup_location || { latitude: -6.8160, longitude: 39.2738 };
+  const destination = ride.destination_location || { latitude: -6.7726, longitude: 39.2285 };
+  const driverStart = pointNear(pickup);
+
+  simulateLeg({
+    ride,
+    from: driverStart,
+    to: pickup,
+    label: "Heading to passenger pickup",
+    locationName: `Heading to pickup: ${ride.pickup}`,
+    destinationName: `Arrived at pickup: ${ride.pickup}`,
+    startPercent: 15,
+    endPercent: 45,
+    onDone: () => {
       publish("ride/status", {
         ride_id: ride.ride_id,
         driver_id: DRIVER.id,
         driver_name: DRIVER.name,
         plate: DRIVER.plate,
-        status: "completed",
-        message: "Ride completed successfully",
+        status: "active",
+        message: "Passenger picked up - heading to destination",
       });
-      console.log(`Ride #${ride.ride_id} completed\n`);
-    }
-  }, intervalMs);
+      console.log(`Passenger picked up for ride #${ride.ride_id}`);
+
+      simulateLeg({
+        ride,
+        from: pickup,
+        to: destination,
+        label: "Taking passenger to destination",
+        locationName: `Taking passenger to ${ride.destination}`,
+        destinationName: ride.destination,
+        startPercent: 50,
+        endPercent: 100,
+        onDone: () => {
+          publish("ride/status", {
+            ride_id: ride.ride_id,
+            driver_id: DRIVER.id,
+            driver_name: DRIVER.name,
+            plate: DRIVER.plate,
+            status: "completed",
+            message: "Ride completed successfully",
+          });
+          console.log(`Ride #${ride.ride_id} completed\n`);
+        },
+      });
+    },
+  });
 }
 
 async function handleRideRequest(ride) {
@@ -157,8 +205,8 @@ async function handleRideRequest(ride) {
     driver_id: DRIVER.id,
     driver_name: DRIVER.name,
     plate: DRIVER.plate,
-    status: "active",
-    message: "Driver accepted - on the way",
+    status: "accepted",
+    message: "Driver accepted - heading to passenger pickup",
   });
 
   console.log(`Ride #${ride.ride_id} accepted`);

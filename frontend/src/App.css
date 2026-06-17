@@ -476,6 +476,12 @@ table thead th {
   border-color: rgba(34,197,94,0.24);
 }
 
+.ride-status-pill.accepted {
+  color: var(--blue);
+  background: var(--blue-dim);
+  border-color: rgba(59,130,246,0.24);
+}
+
 .ride-status-pill.completed {
   color: var(--text2);
   background: var(--white-dim);

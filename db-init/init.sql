@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS rides (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   pickup      VARCHAR(255) NOT NULL,
   destination VARCHAR(255),
-  status      ENUM('pending','active','completed','cancelled') DEFAULT 'pending',
+  status      ENUM('pending','accepted','active','completed','cancelled') DEFAULT 'pending',
   driver_id   INT DEFAULT NULL,
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

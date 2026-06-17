@@ -15,7 +15,8 @@ const getAuth = () => ({
 
 const STATUS_MAP = {
   pending:   { cls: "badge-orange", label: "Pending"   },
-  active:    { cls: "badge-green",  label: "Accepted"  },
+  accepted:  { cls: "badge-green",  label: "Accepted"  },
+  active:    { cls: "badge-green",  label: "On Trip"   },
   completed: { cls: "badge-muted",  label: "Completed" },
   cancelled: { cls: "badge-red",    label: "Cancelled" },
 };
@@ -39,7 +40,8 @@ function describeLiveEvent(event) {
 
   if (topic === "ride/status" || event.type === "ride.status.synced") {
     const statusText = {
-      active: "Driver accepted",
+      accepted: "Driver accepted",
+      active: "Trip started",
       completed: "Ride completed",
       cancelled: "Ride cancelled",
       rejected: "Ride rejected",
@@ -165,12 +167,25 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
   const acceptRide = async (ride) => {
     setAccepting(ride.id);
     try {
-      await axios.patch(`${API}/rides/${ride.id}/status`, { status: "active" }, getAuth());
-      setRides(prev => prev.map(r => r.id === ride.id ? { ...r, status: "active" } : r));
+      await axios.patch(`${API}/rides/${ride.id}/status`, { status: "accepted" }, getAuth());
+      setRides(prev => prev.map(r => r.id === ride.id ? { ...r, status: "accepted" } : r));
       notify({ type: "success", text: `Ride #${ride.id} accepted.` });
     } catch {
       setError("Failed to accept ride.");
       notify({ type: "error", text: "Failed to accept ride." });
+    }
+    finally { setAccepting(null); }
+  };
+
+  const startTrip = async (ride) => {
+    setAccepting(ride.id);
+    try {
+      await axios.patch(`${API}/rides/${ride.id}/status`, { status: "active" }, getAuth());
+      setRides(prev => prev.map(r => r.id === ride.id ? { ...r, status: "active" } : r));
+      notify({ type: "success", text: `Ride #${ride.id} started.` });
+    } catch {
+      setError("Failed to start trip.");
+      notify({ type: "error", text: "Failed to start trip." });
     }
     finally { setAccepting(null); }
   };
@@ -188,14 +203,14 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
     finally { setAccepting(null); }
   };
 
-  const active    = rides.filter(r => r.status === "active").length;
+  const active    = rides.filter(r => ["accepted", "active"].includes(r.status)).length;
   const pending   = rides.filter(r => r.status === "pending").length;
   const completed = rides.filter(r => r.status === "completed").length;
   const revenue   = completed * 3200;
 
   const statCards = [
     { label: "Total Rides",   value: rides.length, sub: "All requests",      up: true,  icon: <FiTruck size={17} />,      color: "var(--text)",  dim: "var(--white-dim2)"     },
-    { label: "Active Now",    value: active,        sub: "Live on the road",  up: true,  icon: <FiActivity size={17} />,   color: "var(--green)", dim: "var(--green-dim)"      },
+    { label: "Active Now",    value: active,        sub: "Pickup or trip in progress",  up: true,  icon: <FiActivity size={17} />,   color: "var(--green)", dim: "var(--green-dim)"      },
     { label: "Pending",       value: pending,       sub: "Awaiting driver",   up: false, icon: <FiClock size={17} />,      color: "var(--amber)", dim: "rgba(245,158,11,0.10)" },
     { label: "Revenue Today", value: `TSh ${revenue.toLocaleString()}`, sub: "Completed rides", up: true, icon: <FiDollarSign size={17} />, color: "var(--green)", dim: "var(--green-dim)" },
   ];
@@ -346,11 +361,11 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <h3 style={{ fontSize: "0.95rem", fontWeight: 600, marginBottom: 2 }}>All Rides</h3>
-              <p style={{ fontSize: "0.75rem", color: "var(--text3)" }}>Accept pending rides and complete accepted rides</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--text3)" }}>Accept requests, start trips at pickup, then complete at destination</p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="badge badge-muted">{rides.length} total</span>
-              {active  > 0 && <span className="badge badge-green">{active} accepted</span>}
+              {active  > 0 && <span className="badge badge-green">{active} active</span>}
               {pending > 0 && <span className="badge badge-orange">{pending} pending</span>}
             </div>
           </div>
@@ -420,6 +435,14 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
                             {accepting === r.id
                               ? <FiRefreshCw size={12} style={{ animation: "spin 0.8s linear infinite" }} />
                               : <><FiCheckCircle size={12} /> Accept</>}
+                          </button>
+                        )}
+                        {r.status === "accepted" && (
+                          <button className="btn btn-sm" disabled={accepting === r.id} onClick={() => startTrip(r)}
+                            style={{ minWidth: 100, display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue-dim)", color: "var(--blue)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: "var(--radius-md)" }}>
+                            {accepting === r.id
+                              ? <FiRefreshCw size={12} style={{ animation: "spin 0.8s linear infinite" }} />
+                              : <><FiCheckCircle size={12} /> Start Trip</>}
                           </button>
                         )}
                         {r.status === "active" && (

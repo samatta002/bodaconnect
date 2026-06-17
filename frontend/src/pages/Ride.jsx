@@ -191,7 +191,8 @@ function describeRideEvent(event) {
 
   if (topic === "ride/status" || event.type === "ride.status.synced") {
     const title = {
-      active: "Driver accepted",
+      accepted: "Driver accepted",
+      active: "Trip started",
       completed: "Trip completed",
       cancelled: "Ride cancelled",
       rejected: "Ride rejected",
@@ -295,7 +296,8 @@ export default function Ride({ onNotify }) {
 
         if (previousStatus && previousStatus !== nextStatus) {
           const message = {
-            active: "Driver accepted your ride and is on the way.",
+            accepted: "Driver accepted your ride and is heading to your pickup.",
+            active: "Trip started. You are heading to your destination.",
             completed: "Ride completed successfully.",
             cancelled: "Ride was cancelled.",
           }[nextStatus];
@@ -343,7 +345,8 @@ export default function Ride({ onNotify }) {
 
   const rideStatusText = {
     pending: "Waiting for a driver to accept.",
-    active: "Driver accepted and is on the way.",
+    accepted: "Driver accepted and is coming to your pickup.",
+    active: "Passenger picked up. Heading to destination.",
     completed: "Ride completed successfully.",
     cancelled: "Ride was cancelled.",
   }[rideStatus] || "Waiting for ride updates.";
@@ -354,7 +357,14 @@ export default function Ride({ onNotify }) {
     : null;
   const driverPhoto = driverLocation?.driver_photo_url || assignedDriver?.photo_url;
   const liveProgress = Math.min(Number(driverLocation?.progress_percent || 0), 100);
-  const progress = rideStatus === "completed" ? 100 : rideStatus === "active" ? Math.max(liveProgress, 15) : liveProgress;
+  const progress = rideStatus === "completed" ? 100 : rideStatus === "active" ? Math.max(liveProgress, 50) : rideStatus === "accepted" ? Math.max(liveProgress, 15) : liveProgress;
+  const trackerTitle = {
+    pending: "Finding driver",
+    accepted: "Driver coming to pickup",
+    active: "On the way to destination",
+    completed: "Trip complete",
+    cancelled: "Ride cancelled",
+  }[rideStatus] || "Finding driver";
 
   const submitReview = async (e) => {
     e.preventDefault();
@@ -461,7 +471,7 @@ export default function Ride({ onNotify }) {
             <div className="ride-tracker-head">
               <div>
                 <span>Live Tracker</span>
-                <strong>{rideStatus === "active" ? "Driver on route" : rideStatus === "completed" ? "Trip complete" : "Finding driver"}</strong>
+                <strong>{trackerTitle}</strong>
               </div>
               <div className={`ride-status-pill ${rideStatus || "pending"}`}>{rideStatus || "pending"}</div>
             </div>
@@ -495,7 +505,8 @@ export default function Ride({ onNotify }) {
               <span>
                 {driverLocation?.location_name ||
                   (rideStatus === "completed" ? "Trip completed." :
-                    rideStatus === "active" ? "Driver accepted. Waiting for live location update." :
+                    rideStatus === "active" ? "Passenger picked up. Heading to destination." :
+                    rideStatus === "accepted" ? "Driver is heading to your pickup location." :
                       "Driver location will appear after acceptance.")}
               </span>
             </div>
