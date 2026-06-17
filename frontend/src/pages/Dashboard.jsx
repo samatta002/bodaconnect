@@ -25,6 +25,56 @@ function StatusBadge({ status }) {
   return <span className={`badge ${cls}`}>{label}</span>;
 }
 
+function describeLiveEvent(event) {
+  const payload = event.payload?.payload || event.payload || {};
+  const topic = event.payload?.topic;
+
+  if (topic === "ride/request") {
+    return {
+      label: "New request",
+      title: `Ride #${payload.ride_id || "-"}`,
+      detail: `${payload.pickup || "Pickup"} to ${payload.destination || "destination"}`,
+    };
+  }
+
+  if (topic === "ride/status" || event.type === "ride.status.synced") {
+    const statusText = {
+      active: "Driver accepted",
+      completed: "Ride completed",
+      cancelled: "Ride cancelled",
+      rejected: "Ride rejected",
+    }[payload.status] || "Ride updated";
+
+    return {
+      label: statusText,
+      title: `Ride #${payload.ride_id || "-"}`,
+      detail: payload.driver_name ? `${payload.driver_name} - ${payload.plate || "No plate"}` : payload.message || "Status changed",
+    };
+  }
+
+  if (topic === "driver/location" || event.type === "driver.location.synced") {
+    return {
+      label: "Location update",
+      title: `Ride #${payload.ride_id || "-"}`,
+      detail: payload.location_name || `Progress ${payload.progress_percent || 0}%`,
+    };
+  }
+
+  if (event.type === "mqtt.publish_skipped") {
+    return {
+      label: "Connection notice",
+      title: "Live update delayed",
+      detail: "The realtime broker is not connected.",
+    };
+  }
+
+  return {
+    label: "Live update",
+    title: `Ride #${payload.ride_id || "-"}`,
+    detail: payload.message || new Date(event.timestamp).toLocaleTimeString(),
+  };
+}
+
 export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }) {
   const [rides, setRides]         = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -266,26 +316,25 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
         >
           <div className="event-feed-head">
             <div>
-              <span>MQTT Event Stream</span>
-              <strong>Live system activity</strong>
+              <span>Live Activity</span>
+              <strong>Recent ride updates</strong>
             </div>
             <FiRadio />
           </div>
           {liveEvents.length === 0 ? (
-            <p className="event-feed-empty">Waiting for MQTT or ride events...</p>
+            <p className="event-feed-empty">Waiting for new ride activity...</p>
           ) : (
             <div className="event-feed-list">
-              {liveEvents.map((event) => (
-                <div key={`${event.id}-${event.type}`} className="event-feed-item">
-                  <span>{event.type}</span>
-                  <strong>
-                    {event.payload?.topic || `Ride #${event.payload?.ride_id || "-"}`}
-                  </strong>
-                  <small>
-                    {event.payload?.payload?.message || event.payload?.message || event.payload?.location_name || new Date(event.timestamp).toLocaleTimeString()}
-                  </small>
-                </div>
-              ))}
+              {liveEvents.map((event) => {
+                const item = describeLiveEvent(event);
+                return (
+                  <div key={`${event.id}-${event.type}`} className="event-feed-item">
+                    <span>{item.label}</span>
+                    <strong>{item.title}</strong>
+                    <small>{item.detail}</small>
+                  </div>
+                );
+              })}
             </div>
           )}
         </motion.div>

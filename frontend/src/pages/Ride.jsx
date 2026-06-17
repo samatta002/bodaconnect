@@ -178,6 +178,44 @@ function MapClickHandler({ setPickup, setDestination, pickup }) {
   return null;
 }
 
+function describeRideEvent(event) {
+  const payload = event.payload?.payload || event.payload || {};
+  const topic = event.payload?.topic;
+
+  if (topic === "ride/request") {
+    return {
+      title: "Ride request sent",
+      detail: `${payload.pickup || "Pickup"} to ${payload.destination || "destination"}`,
+    };
+  }
+
+  if (topic === "ride/status" || event.type === "ride.status.synced") {
+    const title = {
+      active: "Driver accepted",
+      completed: "Trip completed",
+      cancelled: "Ride cancelled",
+      rejected: "Ride rejected",
+    }[payload.status] || "Ride status updated";
+
+    return {
+      title,
+      detail: payload.driver_name ? `${payload.driver_name} - ${payload.plate || "No plate"}` : payload.message || "Your ride status changed.",
+    };
+  }
+
+  if (topic === "driver/location" || event.type === "driver.location.synced") {
+    return {
+      title: "Driver location updated",
+      detail: payload.location_name || `Trip progress ${payload.progress_percent || 0}%`,
+    };
+  }
+
+  return {
+    title: "Ride update",
+    detail: payload.message || new Date(event.timestamp).toLocaleTimeString(),
+  };
+}
+
 export default function Ride({ onNotify }) {
   const [pickup, setPickup]           = useState(null);
   const [destination, setDestination] = useState(null);
@@ -535,20 +573,20 @@ export default function Ride({ onNotify }) {
             className="ride-event-timeline"
           >
             <div className="ride-event-head">
-              <span>Event Timeline</span>
-              <strong>MQTT driven updates</strong>
+              <span>Ride Timeline</span>
+              <strong>Live trip updates</strong>
             </div>
             {rideEvents.length === 0 ? (
-              <p>Waiting for live MQTT events for this ride...</p>
+              <p>Waiting for your driver to respond...</p>
             ) : (
               rideEvents.map((event) => {
-                const payload = event.payload?.payload || event.payload || {};
+                const item = describeRideEvent(event);
                 return (
                   <div key={`${event.id}-${event.type}`} className="ride-event-item">
                     <span />
                     <div>
-                      <strong>{event.payload?.topic || event.type}</strong>
-                      <small>{payload.message || payload.location_name || `Progress ${payload.progress_percent || 0}%`}</small>
+                      <strong>{item.title}</strong>
+                      <small>{item.detail}</small>
                     </div>
                   </div>
                 );

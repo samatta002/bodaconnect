@@ -37,7 +37,7 @@ const content = {
     aboutCopy: "BodaConnect brings the familiar boda boda experience into a clear digital workflow for passengers, drivers, and operators.",
     eventTitle: "Real ride events, not static screens.",
     eventCopy: "Every booking follows a practical flow: a passenger requests a ride, a driver accepts, the trip becomes active, and completion updates return to the dashboard.",
-    checks: ["MQTT-powered ride requests", "Driver dashboard status syncing", "Backend, MySQL, Prometheus, and Grafana stack"],
+    checks: ["Realtime ride requests", "Driver dashboard status syncing", "Backend, MySQL, Prometheus, and Grafana stack"],
     steps: [
       ["01", "Passenger books", "Pickup and destination are selected from the map or list."],
       ["02", "Driver accepts", "The driver dashboard receives the request and confirms the ride."],
@@ -47,7 +47,7 @@ const content = {
     featuresTitle: "Everything feels connected.",
     featuresCopy: "Designed to make the app feel active, useful, and dependable from the first click.",
     features: [
-      ["green", <FiZap />, "Fast ride matching", "New requests reach nearby drivers instantly through live MQTT events."],
+      ["green", <FiZap />, "Fast ride matching", "New requests reach nearby drivers instantly through live ride updates."],
       ["blue", <FiShield />, "Driver-first safety", "Driver profiles, plates, ride states, and trip progress stay visible."],
       ["amber", <FiSmartphone />, "Live trip updates", "Passengers and drivers see the ride move from pending to accepted to completed."],
       ["white", <FiClock />, "Always available", "Built for quick city movement, busy streets, and repeat daily use."],
@@ -59,8 +59,8 @@ const content = {
     faqBadge: "FAQ",
     faqTitle: "Frequently asked questions.",
     faqs: [
-      ["How does BodaConnect match rides?", "A passenger request is saved by the backend and published as an MQTT event. Connected drivers receive it immediately."],
-      ["Can a driver see passenger requests in real time?", "Yes. The dashboard refreshes automatically, and the driver simulator listens to the same live ride/request topic."],
+      ["How does BodaConnect match rides?", "A passenger request is saved by the backend and broadcast instantly to connected drivers."],
+      ["Can a driver see passenger requests in real time?", "Yes. The dashboard refreshes automatically as new ride activity arrives."],
       ["What happens after a driver accepts?", "The ride changes from pending to accepted, then the backend syncs completion events back into MySQL for the frontend."],
       ["Is BodaConnect only for Dar es Salaam?", "The current demo is tuned for Dar es Salaam locations, but the same flow can support more cities."],
     ],
@@ -88,7 +88,7 @@ const content = {
     aboutCopy: "BodaConnect inaleta uzoefu wa boda boda kwenye mfumo wa kidigitali ulio wazi kwa abiria, madereva, na waendeshaji.",
     eventTitle: "Matukio halisi ya safari, si skrini tulivu.",
     eventCopy: "Kila booking ina mtiririko wa vitendo: abiria anaomba safari, dereva anakubali, safari inaanza, kisha taarifa za kukamilika zinarudi kwenye dashboard.",
-    checks: ["Maombi ya safari kupitia MQTT", "Usawazishaji wa hali kwenye dashboard", "Backend, MySQL, Prometheus, na Grafana"],
+    checks: ["Maombi ya safari mubashara", "Usawazishaji wa hali kwenye dashboard", "Backend, MySQL, Prometheus, na Grafana"],
     steps: [
       ["01", "Abiria anaagiza", "Pickup na destination huchaguliwa kwenye ramani au orodha."],
       ["02", "Dereva anakubali", "Dashboard ya dereva inapokea ombi na kuthibitisha safari."],
@@ -98,7 +98,7 @@ const content = {
     featuresTitle: "Kila kitu kimeunganishwa.",
     featuresCopy: "Imeundwa kufanya app ionekane hai, yenye manufaa, na ya kuaminika tangu mwanzo.",
     features: [
-      ["green", <FiZap />, "Kuunganisha haraka", "Maombi mapya huwafikia madereva wa karibu kupitia matukio ya MQTT."],
+      ["green", <FiZap />, "Kuunganisha haraka", "Maombi mapya huwafikia madereva wa karibu kupitia masasisho ya moja kwa moja."],
       ["blue", <FiShield />, "Usalama wa dereva", "Profaili, plate, hali ya safari, na maendeleo hubaki wazi."],
       ["amber", <FiSmartphone />, "Taarifa mubashara", "Abiria na madereva huona safari ikitoka pending hadi accepted na completed."],
       ["white", <FiClock />, "Inapatikana muda wote", "Imejengwa kwa mahitaji ya haraka ya usafiri wa kila siku."],
@@ -110,8 +110,8 @@ const content = {
     faqBadge: "Maswali",
     faqTitle: "Maswali yanayoulizwa mara kwa mara.",
     faqs: [
-      ["BodaConnect inaunganisha vipi safari?", "Ombi la abiria huhifadhiwa na backend kisha kuchapishwa kama tukio la MQTT. Madereva waliounganishwa hupokea mara moja."],
-      ["Dereva anaweza kuona maombi mubashara?", "Ndiyo. Dashboard hujisahihisha yenyewe, na simulator ya dereva husikiliza topic ya ride/request."],
+      ["BodaConnect inaunganisha vipi safari?", "Ombi la abiria huhifadhiwa na backend kisha hutumwa papo hapo kwa madereva waliounganishwa."],
+      ["Dereva anaweza kuona maombi mubashara?", "Ndiyo. Dashboard hujisahihisha yenyewe kadri shughuli mpya za safari zinavyofika."],
       ["Nini hutokea dereva akikubali?", "Safari hubadilika kutoka pending hadi accepted, kisha backend husawazisha completed kwenye MySQL kwa frontend."],
       ["BodaConnect ni ya Dar es Salaam pekee?", "Demo ya sasa imetengenezwa kwa maeneo ya Dar es Salaam, lakini mtiririko unaweza kutumika kwenye miji mingine."],
     ],
