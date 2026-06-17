@@ -60,14 +60,26 @@ async function runTests() {
   });
 
   await test('POST /rides creates a ride', async function() {
-    var res = await request('POST', '/rides', { pickup: 'Kariakoo Market', destination: 'Mlimani City Mall' });
+    var res = await request('POST', '/rides', {
+      passenger_name: 'Test Passenger',
+      passenger_phone: '+255700000000',
+      pickup: 'Kariakoo Market',
+      destination: 'Mlimani City Mall',
+      pickup_location: { latitude: -6.8160, longitude: 39.2738 },
+      destination_location: { latitude: -6.7726, longitude: 39.2285 }
+    });
     assert(res.status === 201, 'Expected 201, got ' + res.status);
     assert(res.body.id !== undefined, 'Missing ride id');
     assert(res.body.status === 'pending', 'Ride should be pending');
+    assert(res.body.passenger_name === 'Test Passenger', 'Missing passenger name');
   });
 
   await test('POST /rides without pickup returns 400', async function() {
-    var res = await request('POST', '/rides', { destination: 'Mwenge' });
+    var res = await request('POST', '/rides', {
+      passenger_name: 'Test Passenger',
+      passenger_phone: '+255700000000',
+      destination: 'Mwenge'
+    });
     assert(res.status === 400, 'Expected 400, got ' + res.status);
     assert(res.body.error !== undefined, 'Missing error message');
   });
