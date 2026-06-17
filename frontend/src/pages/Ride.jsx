@@ -60,6 +60,44 @@ const DAR_PLACES = [
 ];
 
 const FARE_PER_KM = 1200;
+const RIDE_PHASES = {
+  pending: {
+    title: "Finding driver",
+    detail: "Waiting for a driver to accept.",
+    location: "Driver location will appear after acceptance.",
+    minimumProgress: 0,
+    step: 0,
+  },
+  accepted: {
+    title: "Driver coming to pickup",
+    detail: "Driver accepted and is coming to your pickup.",
+    location: "Driver is heading to your pickup location.",
+    minimumProgress: 15,
+    step: 1,
+  },
+  active: {
+    title: "To your destination",
+    detail: "Passenger picked up. Heading to destination.",
+    location: "Passenger picked up. Heading to destination.",
+    minimumProgress: 50,
+    step: 2,
+  },
+  completed: {
+    title: "Trip complete",
+    detail: "Ride completed successfully.",
+    location: "Trip completed.",
+    minimumProgress: 100,
+    step: 3,
+  },
+  cancelled: {
+    title: "Ride cancelled",
+    detail: "Ride was cancelled.",
+    location: "Ride cancelled.",
+    minimumProgress: 0,
+    step: 0,
+  },
+};
+const RIDE_STEPS = ["Request", "Pickup", "Trip", "Done"];
 
 function calcDist(a, b) {
   if (!a || !b) return null;
@@ -361,13 +399,8 @@ export default function Ride({ onNotify }) {
     ? [pickup.lat, pickup.lng]
     : [-6.8160, 39.2738];
 
-  const rideStatusText = {
-    pending: "Waiting for a driver to accept.",
-    accepted: "Driver accepted and is coming to your pickup.",
-    active: "Passenger picked up. Heading to destination.",
-    completed: "Ride completed successfully.",
-    cancelled: "Ride was cancelled.",
-  }[rideStatus] || "Waiting for ride updates.";
+  const ridePhase = RIDE_PHASES[rideStatus] || RIDE_PHASES.pending;
+  const rideStatusText = ridePhase.detail;
   const driverLocation = tracking?.driver_location;
   const assignedDriver = tracking?.driver;
   const driverPosition = driverLocation?.latitude && driverLocation?.longitude
@@ -375,14 +408,9 @@ export default function Ride({ onNotify }) {
     : null;
   const driverPhoto = driverLocation?.driver_photo_url || assignedDriver?.photo_url;
   const liveProgress = Math.min(Number(driverLocation?.progress_percent || 0), 100);
-  const progress = rideStatus === "completed" ? 100 : rideStatus === "active" ? Math.max(liveProgress, 50) : rideStatus === "accepted" ? Math.max(liveProgress, 15) : liveProgress;
-  const trackerTitle = {
-    pending: "Finding driver",
-    accepted: "Driver coming to pickup",
-    active: "On the way to destination",
-    completed: "Trip complete",
-    cancelled: "Ride cancelled",
-  }[rideStatus] || "Finding driver";
+  const progress = rideStatus === "cancelled" ? 0 : Math.min(100, Math.max(liveProgress, ridePhase.minimumProgress));
+  const trackerTitle = ridePhase.title;
+  const trackerLocationText = driverLocation?.location_name || ridePhase.location;
 
   const submitReview = async (e) => {
     e.preventDefault();
@@ -506,6 +534,17 @@ export default function Ride({ onNotify }) {
               <span style={{ width: `${progress}%` }} />
             </div>
 
+            <div className="ride-phase-steps" aria-label="Ride progress">
+              {RIDE_STEPS.map((step, index) => (
+                <span
+                  key={step}
+                  className={index <= ridePhase.step && rideStatus !== "cancelled" ? "active" : ""}
+                >
+                  {step}
+                </span>
+              ))}
+            </div>
+
             <div className="ride-tracker-grid">
               <div className="ride-driver-identity">
                 <span className="ride-driver-photo">
@@ -528,13 +567,7 @@ export default function Ride({ onNotify }) {
 
             <div className="ride-tracker-location">
               <FiMapPin />
-              <span>
-                {driverLocation?.location_name ||
-                  (rideStatus === "completed" ? "Trip completed." :
-                    rideStatus === "active" ? "Passenger picked up. Heading to destination." :
-                    rideStatus === "accepted" ? "Driver is heading to your pickup location." :
-                      "Driver location will appear after acceptance.")}
-              </span>
+              <span>{trackerLocationText}</span>
             </div>
           </motion.div>
         )}
