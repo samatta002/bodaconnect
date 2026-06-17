@@ -55,6 +55,24 @@ const MQTT_PORT = process.env.MQTT_PORT || 1883;
 let mqttClient = null;
 let dbConnection = null;
 const latestRideLocations = new Map();
+const eventHistory = [];
+const eventClients = new Set();
+
+function recordEvent(type, payload = {}) {
+  const event = {
+    id: Date.now(),
+    type,
+    payload,
+    timestamp: new Date().toISOString(),
+  };
+
+  eventHistory.unshift(event);
+  eventHistory.splice(50);
+
+  const line = `data: ${JSON.stringify(event)}\n\n`;
+  eventClients.forEach((client) => client.write(line));
+  return event;
+}
 
 function normalizeRideStatus(status) {
   if (status === "rejected") return "cancelled";
@@ -110,6 +128,7 @@ async function syncRideStatusFromMQTT(data) {
   }
 
   console.log(`Synced ride #${rideId} from MQTT: ${previousStatus} -> ${status}`);
+  recordEvent("ride.status.synced", { ride_id: rideId, previous_status: previousStatus, status, driver_id: driverId });
 
   if (data.driver_name || data.plate) {
     const previousLocation = latestRideLocations.get(rideId) || {};
@@ -143,6 +162,13 @@ function syncDriverLocationFromMQTT(data) {
     location_name: data.location_name || "On route",
     progress_percent: data.progress_percent || 0,
     timestamp: data.timestamp || new Date().toISOString(),
+  });
+  recordEvent("driver.location.synced", {
+    ride_id: rideId,
+    driver_id: data.driver_id || null,
+    driver_name: data.driver_name || null,
+    progress_percent: data.progress_percent || 0,
+    location_name: data.location_name || "On route",
   });
 }
 
@@ -180,6 +206,7 @@ function connectMQTT() {
       if (topic === "driver/location") {
         syncDriverLocationFromMQTT(data);
       }
+      recordEvent("mqtt.received", { topic, payload: data });
       console.log(`📨 MQTT [${topic}]:`, data);
     } catch {
       console.log(`📨 MQTT [${topic}]: ${message.toString()}`);
@@ -203,6 +230,7 @@ function connectMQTT() {
 function mqttPublish(topic, payload) {
   if (!mqttClient || !mqttClient.connected) {
     console.log(`⚠️  MQTT not connected, skipping publish to ${topic}`);
+    recordEvent("mqtt.publish_skipped", { topic, payload, reason: "MQTT not connected" });
     return;
   }
   const message = JSON.stringify({ ...payload, timestamp: new Date().toISOString() });
@@ -212,6 +240,7 @@ function mqttPublish(topic, payload) {
     } else {
       console.log(`📤 MQTT published [${topic}]:`, message);
       mqttMessagesTotal.inc({ topic });
+      recordEvent("mqtt.published", { topic, payload: JSON.parse(message) });
     }
   });
 }
@@ -318,6 +347,29 @@ async function start() {
   app.get("/metrics", async (req, res) => {
     res.set("Content-Type", register.contentType);
     res.end(await register.metrics());
+  });
+
+  app.get("/events", (req, res) => {
+    res.set({
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    res.flushHeaders?.();
+
+    eventHistory.slice().reverse().forEach((event) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    });
+
+    const heartbeat = setInterval(() => {
+      res.write(": heartbeat\n\n");
+    }, 25000);
+
+    eventClients.add(res);
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      eventClients.delete(res);
+    });
   });
 
   // REGISTER

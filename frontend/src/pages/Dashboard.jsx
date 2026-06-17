@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   FiTruck, FiCheckCircle, FiClock, FiDollarSign,
   FiRefreshCw, FiAlertCircle, FiActivity,
-  FiArrowUpRight, FiArrowDownRight, FiStar, FiPower,
+  FiArrowUpRight, FiArrowDownRight, FiStar, FiPower, FiRadio,
 } from "react-icons/fi";
 
 const API = "/api";
@@ -33,6 +33,7 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
   const [hovered, setHovered]     = useState(null);
   const [driverStatus, setDriverStatus] = useState(driver?.status || "available");
   const [savingStatus, setSavingStatus] = useState(false);
+  const [liveEvents, setLiveEvents] = useState([]);
   const isOnline = driverStatus !== "offline";
   const notify = (toast) => onNotify?.(toast);
 
@@ -57,6 +58,30 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
     fetchRides();
     const timer = setInterval(() => fetchRides({ silent: true }), 3000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const events = new EventSource(`${API}/events`);
+
+    events.onmessage = (message) => {
+      try {
+        const event = JSON.parse(message.data);
+        setLiveEvents((current) => [event, ...current].slice(0, 8));
+
+        const topic = event.payload?.topic;
+        if (topic === "ride/request" || topic === "ride/status" || event.type.startsWith("ride.")) {
+          fetchRides({ silent: true });
+        }
+      } catch {
+        // Ignore malformed event stream messages.
+      }
+    };
+
+    events.onerror = () => {
+      events.close();
+    };
+
+    return () => events.close();
   }, []);
 
   useEffect(() => {
@@ -232,6 +257,38 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
             </motion.div>
           ))}
         </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22 }}
+          className="event-feed-card"
+        >
+          <div className="event-feed-head">
+            <div>
+              <span>MQTT Event Stream</span>
+              <strong>Live system activity</strong>
+            </div>
+            <FiRadio />
+          </div>
+          {liveEvents.length === 0 ? (
+            <p className="event-feed-empty">Waiting for MQTT or ride events...</p>
+          ) : (
+            <div className="event-feed-list">
+              {liveEvents.map((event) => (
+                <div key={`${event.id}-${event.type}`} className="event-feed-item">
+                  <span>{event.type}</span>
+                  <strong>
+                    {event.payload?.topic || `Ride #${event.payload?.ride_id || "-"}`}
+                  </strong>
+                  <small>
+                    {event.payload?.payload?.message || event.payload?.message || event.payload?.location_name || new Date(event.timestamp).toLocaleTimeString()}
+                  </small>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
 
         {/* Rides table */}
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}

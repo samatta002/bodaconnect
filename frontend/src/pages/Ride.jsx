@@ -191,6 +191,7 @@ export default function Ride({ onNotify }) {
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [submittedReview, setSubmittedReview] = useState(null);
+  const [rideEvents, setRideEvents] = useState([]);
   const notify = (nextToast) => {
     if (onNotify) onNotify(nextToast);
     else setToast(nextToast);
@@ -239,7 +240,7 @@ export default function Ride({ onNotify }) {
   const reset = () => {
     setPickup(null); setDestination(null);
     setStatus("idle"); setRideId(null); setRideStatus(null);
-    setTracking(null); setToast(null); setSubmittedReview(null); setReviewRating(5); setReviewComment("");
+    setTracking(null); setToast(null); setSubmittedReview(null); setReviewRating(5); setReviewComment(""); setRideEvents([]);
   };
 
   useEffect(() => {
@@ -278,6 +279,25 @@ export default function Ride({ onNotify }) {
     const timer = setTimeout(() => setToast(null), 3200);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (status !== "success" || !rideId) return;
+
+    const events = new EventSource("/api/events");
+    events.onmessage = (message) => {
+      try {
+        const event = JSON.parse(message.data);
+        const payload = event.payload?.payload || event.payload || {};
+        if (Number(payload.ride_id) !== Number(rideId)) return;
+        setRideEvents((current) => [event, ...current].slice(0, 6));
+      } catch {
+        // Ignore malformed event stream messages.
+      }
+    };
+
+    events.onerror = () => events.close();
+    return () => events.close();
+  }, [status, rideId]);
 
   const mapCenter = pickup
     ? [pickup.lat, pickup.lng]
@@ -504,6 +524,35 @@ export default function Ride({ onNotify }) {
                   {submittingReview ? "Submitting..." : "Submit review"}
                 </button>
               </form>
+            )}
+          </motion.div>
+        )}
+
+        {status === "success" && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="ride-event-timeline"
+          >
+            <div className="ride-event-head">
+              <span>Event Timeline</span>
+              <strong>MQTT driven updates</strong>
+            </div>
+            {rideEvents.length === 0 ? (
+              <p>Waiting for live MQTT events for this ride...</p>
+            ) : (
+              rideEvents.map((event) => {
+                const payload = event.payload?.payload || event.payload || {};
+                return (
+                  <div key={`${event.id}-${event.type}`} className="ride-event-item">
+                    <span />
+                    <div>
+                      <strong>{event.payload?.topic || event.type}</strong>
+                      <small>{payload.message || payload.location_name || `Progress ${payload.progress_percent || 0}%`}</small>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </motion.div>
         )}
