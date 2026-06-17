@@ -220,6 +220,8 @@ function describeRideEvent(event) {
 export default function Ride({ onNotify }) {
   const [pickup, setPickup]           = useState(null);
   const [destination, setDestination] = useState(null);
+  const [passengerName, setPassengerName] = useState("");
+  const [passengerPhone, setPassengerPhone] = useState("");
   const [status, setStatus]           = useState("idle");
   const [rideId, setRideId]           = useState(null);
   const [rideStatus, setRideStatus]   = useState(null);
@@ -240,10 +242,12 @@ export default function Ride({ onNotify }) {
   const fare = dist ? Math.round(dist * FARE_PER_KM) : null;
 
   const requestRide = async () => {
-    if (!pickup) return;
+    if (!pickup || !passengerName.trim() || !passengerPhone.trim()) return;
     setStatus("loading");
     try {
       const res = await axios.post("/api/rides", {
+        passenger_name: passengerName.trim(),
+        passenger_phone: passengerPhone.trim(),
         pickup: pickup.name,
         destination: destination?.name || "Not specified",
         pickup_location: { latitude: pickup.lat, longitude: pickup.lng },
@@ -278,8 +282,22 @@ export default function Ride({ onNotify }) {
 
   const reset = () => {
     setPickup(null); setDestination(null);
+    setPassengerName(""); setPassengerPhone("");
     setStatus("idle"); setRideId(null); setRideStatus(null);
     setTracking(null); setToast(null); setSubmittedReview(null); setReviewRating(5); setReviewComment(""); setRideEvents([]);
+  };
+
+  const cancelRide = async () => {
+    if (!rideId) return;
+
+    try {
+      await axios.patch(`/api/rides/${rideId}/cancel`);
+      setRideStatus("cancelled");
+      setTracking((current) => current ? { ...current, ride: { ...current.ride, status: "cancelled" } } : current);
+      notify({ type: "success", text: "Ride cancelled." });
+    } catch (err) {
+      notify({ type: "error", text: err.response?.data?.error || "Could not cancel ride." });
+    }
   };
 
   useEffect(() => {
@@ -439,6 +457,14 @@ export default function Ride({ onNotify }) {
                   fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" }}>
                 Book Another Ride
               </button>
+              {["pending", "accepted"].includes(rideStatus) && (
+                <button onClick={cancelRide}
+                  style={{ marginTop: 8, width: "100%", padding: "8px", background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, color: "#ef4444",
+                    fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  Cancel Ride
+                </button>
+              )}
             </motion.div>
           )}
 
@@ -609,6 +635,17 @@ export default function Ride({ onNotify }) {
         {/* Location selects */}
         {status !== "success" && (
           <div style={{ padding: "1rem 1.25rem", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div className="ride-passenger-fields">
+              <label>
+                <span>Passenger Name</span>
+                <input value={passengerName} onChange={(e) => setPassengerName(e.target.value)} placeholder="Your full name" />
+              </label>
+              <label>
+                <span>Phone Number</span>
+                <input value={passengerPhone} onChange={(e) => setPassengerPhone(e.target.value)} placeholder="+255 700 000 000" />
+              </label>
+            </div>
+
             <PlaceSelect
               label="Pickup"
               value={pickup}
@@ -654,13 +691,13 @@ export default function Ride({ onNotify }) {
             {/* Request button */}
             <button
               onClick={requestRide}
-              disabled={!pickup || status === "loading"}
+              disabled={!pickup || !passengerName.trim() || !passengerPhone.trim() || status === "loading"}
               style={{
                 width: "100%", padding: "13px",
-                background: !pickup || status === "loading" ? "rgba(34,197,94,0.3)" : "#22c55e",
+                background: !pickup || !passengerName.trim() || !passengerPhone.trim() || status === "loading" ? "rgba(34,197,94,0.3)" : "#22c55e",
                 border: "none", borderRadius: 9999,
                 color: "#000", fontWeight: 700, fontSize: "0.95rem",
-                cursor: !pickup || status === "loading" ? "not-allowed" : "pointer",
+                cursor: !pickup || !passengerName.trim() || !passengerPhone.trim() || status === "loading" ? "not-allowed" : "pointer",
                 fontFamily: "inherit",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                 transition: "all 0.2s",

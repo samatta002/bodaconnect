@@ -109,6 +109,14 @@ async function syncRideStatusFromMQTT(data) {
     [status, driverId, rideId]
   );
 
+  if (driverId && ["accepted", "active"].includes(status)) {
+    await dbConnection.execute("UPDATE drivers SET status='on_trip' WHERE id=?", [driverId]);
+  }
+
+  if (driverId && ["completed", "cancelled"].includes(status)) {
+    await dbConnection.execute("UPDATE drivers SET status='available' WHERE id=?", [driverId]);
+  }
+
   if (previousStatus !== status) {
     if (status === "accepted") ridesAccepted.inc();
 
@@ -304,8 +312,14 @@ async function start() {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS rides (
       id INT AUTO_INCREMENT PRIMARY KEY,
+      passenger_name VARCHAR(255),
+      passenger_phone VARCHAR(30),
       pickup VARCHAR(255) NOT NULL,
       destination VARCHAR(255),
+      pickup_lat DECIMAL(10,6),
+      pickup_lng DECIMAL(10,6),
+      destination_lat DECIMAL(10,6),
+      destination_lng DECIMAL(10,6),
       status ENUM('pending','accepted','active','completed','cancelled') DEFAULT 'pending',
       driver_id INT DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -316,6 +330,23 @@ async function start() {
     await db.execute("ALTER TABLE rides MODIFY status ENUM('pending','accepted','active','completed','cancelled') DEFAULT 'pending'");
   } catch (err) {
     console.log("Could not update rides status enum:", err.message);
+  }
+
+  const rideColumnMigrations = [
+    "ALTER TABLE rides ADD COLUMN passenger_name VARCHAR(255) AFTER id",
+    "ALTER TABLE rides ADD COLUMN passenger_phone VARCHAR(30) AFTER passenger_name",
+    "ALTER TABLE rides ADD COLUMN pickup_lat DECIMAL(10,6) AFTER destination",
+    "ALTER TABLE rides ADD COLUMN pickup_lng DECIMAL(10,6) AFTER pickup_lat",
+    "ALTER TABLE rides ADD COLUMN destination_lat DECIMAL(10,6) AFTER pickup_lng",
+    "ALTER TABLE rides ADD COLUMN destination_lng DECIMAL(10,6) AFTER destination_lat",
+  ];
+
+  for (const sql of rideColumnMigrations) {
+    try {
+      await db.execute(sql);
+    } catch (err) {
+      if (err.code !== "ER_DUP_FIELDNAME") throw err;
+    }
   }
 
   console.log("✅ Tables ready");
@@ -516,27 +547,39 @@ async function start() {
 
   // POST /rides — public, rider books a ride
   app.post("/rides", async (req, res) => {
-    const { pickup, destination, pickup_location, destination_location } = req.body;
+    const { passenger_name, passenger_phone, pickup, destination, pickup_location, destination_location } = req.body;
+    const pickupLat = pickup_location?.latitude ?? null;
+    const pickupLng = pickup_location?.longitude ?? null;
+    const destinationLat = destination_location?.latitude ?? null;
+    const destinationLng = destination_location?.longitude ?? null;
+
+    if (!passenger_name || !passenger_phone) {
+      return res.status(400).json({ error: "passenger name and phone are required" });
+    }
     if (!pickup) return res.status(400).json({ error: "pickup is required" });
     try {
       const [result] = await db.execute(
-        "INSERT INTO rides (pickup, destination, status) VALUES (?,?,'pending')",
-        [pickup, destination || ""]
+        `INSERT INTO rides
+          (passenger_name, passenger_phone, pickup, destination, pickup_lat, pickup_lng, destination_lat, destination_lng, status)
+         VALUES (?,?,?,?,?,?,?,?,'pending')`,
+        [passenger_name, passenger_phone, pickup, destination || "", pickupLat, pickupLng, destinationLat, destinationLng]
       );
       ridesTotal.inc();
 
       // ── OPTION A: Publish ride request to MQTT ────────
       mqttPublish("ride/request", {
         ride_id: result.insertId,
+        passenger_name,
+        passenger_phone,
         pickup,
         destination: destination || "Not specified",
-        pickup_location,
-        destination_location,
+        pickup_location: pickupLat !== null && pickupLng !== null ? { latitude: Number(pickupLat), longitude: Number(pickupLng) } : null,
+        destination_location: destinationLat !== null && destinationLng !== null ? { latitude: Number(destinationLat), longitude: Number(destinationLng) } : null,
         status: "pending",
         message: "New ride request — drivers please respond",
       });
 
-      res.status(201).json({ id: result.insertId, pickup, destination, status: "pending" });
+      res.status(201).json({ id: result.insertId, passenger_name, passenger_phone, pickup, destination, status: "pending" });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -547,7 +590,9 @@ async function start() {
     try {
       const rideId = Number(req.params.id);
       const [rows] = await db.execute(
-        `SELECT r.id, r.pickup, r.destination, r.status, r.driver_id, r.created_at,
+        `SELECT r.id, r.passenger_name, r.passenger_phone, r.pickup, r.destination,
+          r.pickup_lat, r.pickup_lng, r.destination_lat, r.destination_lng,
+          r.status, r.driver_id, r.created_at,
           d.name AS driver_name, d.plate AS driver_plate, d.photo_url AS driver_photo_url, d.rating AS driver_rating
          FROM rides r
          LEFT JOIN drivers d ON d.id = r.driver_id
@@ -630,11 +675,45 @@ async function start() {
   app.get("/rides/:id", async (req, res) => {
     try {
       const [rows] = await db.execute(
-        "SELECT id, pickup, destination, status, driver_id, created_at FROM rides WHERE id=?",
+        "SELECT id, passenger_name, passenger_phone, pickup, destination, pickup_lat, pickup_lng, destination_lat, destination_lng, status, driver_id, created_at FROM rides WHERE id=?",
         [req.params.id]
       );
       if (rows.length === 0) return res.status(404).json({ error: "Ride not found" });
       res.json(rows[0]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/rides/:id/cancel", async (req, res) => {
+    try {
+      const rideId = Number(req.params.id);
+      if (!Number.isInteger(rideId)) return res.status(400).json({ error: "Invalid ride id" });
+
+      const [rows] = await db.execute(
+        "SELECT id, status, driver_id FROM rides WHERE id=?",
+        [rideId]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: "Ride not found" });
+
+      const ride = rows[0];
+      if (!["pending", "accepted"].includes(ride.status)) {
+        return res.status(400).json({ error: "Only rides before pickup can be cancelled" });
+      }
+
+      await db.execute("UPDATE rides SET status='cancelled' WHERE id=?", [rideId]);
+      if (ride.driver_id) {
+        await db.execute("UPDATE drivers SET status='available' WHERE id=?", [ride.driver_id]);
+      }
+
+      mqttPublish("ride/status", {
+        ride_id: rideId,
+        driver_id: ride.driver_id,
+        status: "cancelled",
+        message: "Passenger cancelled before pickup",
+      });
+
+      res.json({ success: true, status: "cancelled" });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -648,18 +727,39 @@ async function start() {
     }
 
     try {
+      const [currentRows] = await db.execute(
+        "SELECT status, driver_id FROM rides WHERE id=?",
+        [req.params.id]
+      );
+      if (currentRows.length === 0) return res.status(404).json({ error: "Ride not found" });
+      const previousStatus = currentRows[0].status;
+
       await db.execute(
         "UPDATE rides SET status=?, driver_id=? WHERE id=?",
         [nextStatus, req.driver.id, req.params.id]
       );
 
-      if (nextStatus === "accepted") {
+      if (["accepted", "active"].includes(nextStatus)) {
+        await db.execute("UPDATE drivers SET status='on_trip' WHERE id=?", [req.driver.id]);
+      }
+
+      if (["completed", "cancelled"].includes(nextStatus)) {
+        await db.execute("UPDATE drivers SET status='available' WHERE id=?", [req.driver.id]);
+      }
+
+      if (nextStatus === "accepted" && previousStatus !== "accepted") {
         ridesAccepted.inc();
+      }
+      if (!["accepted", "active"].includes(previousStatus) && ["accepted", "active"].includes(nextStatus)) {
         activeRidesGauge.inc();
       }
-      if (nextStatus === "completed") {
+      if (nextStatus === "completed" && previousStatus !== "completed") {
         ridesCompleted.inc();
+      }
+      if (["accepted", "active"].includes(previousStatus) && ["completed", "cancelled"].includes(nextStatus)) {
         activeRidesGauge.dec();
+      }
+      if (nextStatus === "completed") {
         const [rev] = await db.execute("SELECT COUNT(*) as count FROM rides WHERE status='completed'");
         revenueGauge.set(rev[0].count * 3200);
       }

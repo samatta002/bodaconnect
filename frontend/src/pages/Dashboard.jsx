@@ -389,7 +389,7 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
                 <thead>
                   <tr>
-                    {["ID", "Pickup", "Destination", "Status", "Action"].map(h => (
+                    {["ID", "Passenger", "Pickup", "Destination", "Status", "Action"].map(h => (
                       <th key={h} style={{
                         padding: "11px 20px", textAlign: "left",
                         fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.08em",
@@ -412,6 +412,10 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
                         <span style={{ fontFamily: "var(--mono)", fontSize: "0.78rem", color: "var(--text3)" }}>
                           #{String(r.id || i+1).padStart(3,"0")}
                         </span>
+                      </td>
+                      <td style={{ padding: "13px 20px" }}>
+                        <div style={{ fontSize: "0.83rem", color: "var(--text2)", fontWeight: 600 }}>{r.passenger_name || "Passenger"}</div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text3)", marginTop: 2 }}>{r.passenger_phone || "No phone"}</div>
                       </td>
                       <td style={{ padding: "13px 20px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -456,6 +460,11 @@ export default function Dashboard({ driver, onLogout, onDriverUpdate, onNotify }
                         {r.status === "completed" && (
                           <span style={{ fontSize: "0.78rem", color: "var(--text3)", display: "flex", alignItems: "center", gap: 5 }}>
                             <FiCheckCircle size={13} color="var(--green)" /> Done
+                          </span>
+                        )}
+                        {r.status === "cancelled" && (
+                          <span style={{ fontSize: "0.78rem", color: "var(--red)", display: "flex", alignItems: "center", gap: 5 }}>
+                            <FiAlertCircle size={13} /> Cancelled
                           </span>
                         )}
                       </td>
