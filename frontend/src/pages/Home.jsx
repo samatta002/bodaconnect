@@ -19,6 +19,7 @@ import {
   FiUsers,
   FiZap,
 } from "react-icons/fi";
+import { FaFacebookF, FaGithub, FaInstagram, FaLinkedinIn, FaXTwitter } from "react-icons/fa6";
 
 const content = {
   en: {
@@ -74,6 +75,7 @@ const content = {
     footerCopy: "Realtime boda boda booking, driver coordination, and ride visibility for everyday city movement.",
     quickLinks: "Quick links",
     legal: "Legal",
+    social: "Social",
     terms: "Terms & Conditions",
     privacy: "Privacy Policy",
     copyright: "All rights reserved.",
@@ -132,6 +134,7 @@ const content = {
     footerCopy: "Booking ya boda boda mubashara, uratibu wa madereva, na ufuatiliaji wa safari kwa usafiri wa kila siku mjini.",
     quickLinks: "Viungo",
     legal: "Sheria",
+    social: "Mitandao",
     terms: "Vigezo na Masharti",
     privacy: "Sera ya Faragha",
     copyright: "Haki zote zimehifadhiwa.",
@@ -319,6 +322,13 @@ export default function Home({ lang = "en" }) {
           <span className="home-footer-credit">
             {t.developer} <strong>Mbwana Ally</strong>
           </span>
+          <div className="home-social-links" aria-label="BodaConnect social media links">
+            <a href="https://facebook.com/bodaconnect" target="_blank" rel="noreferrer" title="Facebook"><FaFacebookF /></a>
+            <a href="https://instagram.com/bodaconnect" target="_blank" rel="noreferrer" title="Instagram"><FaInstagram /></a>
+            <a href="https://x.com/bodaconnect" target="_blank" rel="noreferrer" title="X"><FaXTwitter /></a>
+            <a href="https://linkedin.com/company/bodaconnect" target="_blank" rel="noreferrer" title="LinkedIn"><FaLinkedinIn /></a>
+            <a href="https://github.com/samatta002/bodaconnect" target="_blank" rel="noreferrer" title="GitHub"><FaGithub /></a>
+          </div>
         </div>
 
         <div className="home-footer-links">
@@ -334,6 +344,13 @@ export default function Home({ lang = "en" }) {
             <a href="#terms">{t.terms}</a>
             <a href="#privacy">{t.privacy}</a>
             <a href="mailto:support@bodaconnect.app">Support</a>
+          </div>
+          <div>
+            <h3>{t.social}</h3>
+            <a href="https://facebook.com/bodaconnect" target="_blank" rel="noreferrer">Facebook</a>
+            <a href="https://instagram.com/bodaconnect" target="_blank" rel="noreferrer">Instagram</a>
+            <a href="https://x.com/bodaconnect" target="_blank" rel="noreferrer">X / Twitter</a>
+            <a href="https://linkedin.com/company/bodaconnect" target="_blank" rel="noreferrer">LinkedIn</a>
           </div>
         </div>
 
