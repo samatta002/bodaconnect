@@ -264,9 +264,18 @@ async function waitForDB() {
   };
   while (true) {
     try {
-      const conn = await mysql.createConnection(cfg);
+      const pool = mysql.createPool({
+        ...cfg,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 0,
+      });
+      const connection = await pool.getConnection();
+      connection.release();
       console.log("✅ MySQL connected");
-      return conn;
+      return pool;
     } catch (err) {
       console.log("⏳ Waiting for MySQL...", err.message);
       await new Promise(r => setTimeout(r, 3000));
